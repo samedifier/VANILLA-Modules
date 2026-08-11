@@ -33,6 +33,7 @@ bool VANILLA_GLFW_init(void) {
 
 int VANILLA_GLFW_createWindow(unsigned int width, unsigned int height) {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     g_glfw.window = glfwCreateWindow((int)width, (int)height, windowTitle, NULL, NULL);
