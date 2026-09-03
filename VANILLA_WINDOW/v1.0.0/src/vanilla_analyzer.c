@@ -26,7 +26,7 @@
 
 void VANILLA_analyzeStream(void) {
     if (!stream) {
-        printf("[ANALYZER] HATA: Stream pointer NULL!\n");
+        printf("[VANILLA WINDOW] [ANALYZER] stream pointer NULL\n");
         return;
     }
     if (stream->chunkModelDirtyCount == 0 && stream->chunkDirtyCount == 0) {
@@ -143,28 +143,57 @@ void VANILLA_analyzeStream(void) {
                     float rx = 0.0f, ry = 0.0f, rz = 0.0f;
 
                     if (dim == 3 && prec == 4) {
-                        ANYCORE_TransformChunk3Df* tc = &((ANYCORE_TransformChunk3Df*)tcArray)[dirtyChunkIdx];
-                        px = tc->posx[slotIdx]; py = tc->posy[slotIdx]; pz = tc->posz[slotIdx];
-                        sx = tc->scax[slotIdx]; sy = tc->scay[slotIdx]; sz = tc->scaz[slotIdx];
-                        rx = tc->rotx[slotIdx]; ry = tc->roty[slotIdx]; rz = tc->rotz[slotIdx];
-                    }
-                    else if (dim == 3 && prec == 8) {
-                        ANYCORE_TransformChunk3Dd* tc = &((ANYCORE_TransformChunk3Dd*)tcArray)[dirtyChunkIdx];
-                        px = (float)tc->posx[slotIdx]; py = (float)tc->posy[slotIdx]; pz = (float)tc->posz[slotIdx];
-                        sx = (float)tc->scax[slotIdx]; sy = (float)tc->scay[slotIdx]; sz = (float)tc->scaz[slotIdx];
-                        rx = (float)tc->rotx[slotIdx]; ry = (float)tc->roty[slotIdx]; rz = (float)tc->rotz[slotIdx];
-                    }
-                    else if (dim == 2 && prec == 4) {
-                        ANYCORE_TransformChunk2Df* tc = &((ANYCORE_TransformChunk2Df*)tcArray)[dirtyChunkIdx];
-                        px = tc->posx[slotIdx]; py = tc->posy[slotIdx];
-                        sx = tc->scax[slotIdx]; sy = tc->scay[slotIdx];
-                        rz = tc->rotz[slotIdx];
-                    }
-                    else if (dim == 2 && prec == 8) {
-                        ANYCORE_TransformChunk2Dd* tc = &((ANYCORE_TransformChunk2Dd*)tcArray)[dirtyChunkIdx];
-                        px = (float)tc->posx[slotIdx]; py = (float)tc->posy[slotIdx];
-                        sx = (float)tc->scax[slotIdx]; sy = (float)tc->scay[slotIdx];
-                        rz = (float)tc->rotz[slotIdx];
+                        ANYCORE_Transform3Df* tc = ((ANYCORE_Transform3Df**)tcArray)[dirtyChunkIdx];
+                        ANYCORE_Transform3Df* transform = &tc[slotIdx];
+
+                        px = transform->posx;
+                        py = transform->posy;
+                        pz = transform->posz;
+
+                        sx = transform->scax;
+                        sy = transform->scay;
+                        sz = transform->scaz;
+
+                        rx = transform->rotx;
+                        ry = transform->roty;
+                        rz = transform->rotz;
+                    } else if (dim == 3 && prec == 8) {
+                        ANYCORE_Transform3Dd* tc = ((ANYCORE_Transform3Dd**)tcArray)[dirtyChunkIdx];
+                        ANYCORE_Transform3Dd* transform = &tc[slotIdx];
+
+                        px = (float)transform->posx;
+                        py = (float)transform->posy;
+                        pz = (float)transform->posz;
+
+                        sx = (float)transform->scax;
+                        sy = (float)transform->scay;
+                        sz = (float)transform->scaz;
+
+                        rx = (float)transform->rotx;
+                        ry = (float)transform->roty;
+                        rz = (float)transform->rotz;
+                    } else if (dim == 2 && prec == 4) {
+                        ANYCORE_Transform2Df* tc = ((ANYCORE_Transform2Df**)tcArray)[dirtyChunkIdx];
+                        ANYCORE_Transform2Df* transform = &tc[slotIdx];
+
+                        px = transform->posx;
+                        py = transform->posy;
+
+                        sx = transform->scax;
+                        sy = transform->scay;
+
+                        rz = transform->rotz;
+                    } else if (dim == 2 && prec == 8) {
+                        ANYCORE_Transform2Dd* tc = ((ANYCORE_Transform2Dd**)tcArray)[dirtyChunkIdx];
+                        ANYCORE_Transform2Dd* transform = &tc[slotIdx];
+
+                        px = (float)transform->posx;
+                        py = (float)transform->posy;
+                        
+                        sx = (float)transform->scax;
+                        sy = (float)transform->scay;
+
+                        rz = (float)transform->rotz;
                     }
 
                     float cx = cosf(rx), sx_sin = sinf(rx);

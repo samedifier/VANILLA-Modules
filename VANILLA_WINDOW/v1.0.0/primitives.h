@@ -53,52 +53,48 @@ typedef struct {
 } ANYCORE_SceneChunk;
 
 typedef struct {
-    float* posx;
-    float* posy;
-
-    float* rotz;
-
-    float* scax;
-    float* scay;
-} ANYCORE_TransformChunk2Df;
+    float posx;
+    float posy;
+    float rotz;
+    float scax;
+    float scay;
+} ANYCORE_Transform2Df;
 
 typedef struct {
-    float* posx;
-    float* posy;
-    float* posz;
+    float posx;
+    float posy;
+    float posz;
 
-    float* rotx;
-    float* roty;
-    float* rotz;
+    float rotx;
+    float roty;
+    float rotz;
 
-    float* scax;
-    float* scay;
-    float* scaz;
-} ANYCORE_TransformChunk3Df;
-
-typedef struct {
-    double* posx;
-    double* posy;
-
-    double* rotz;
-
-    double* scax;
-    double* scay;
-} ANYCORE_TransformChunk2Dd;
+    float scax;
+    float scay;
+    float scaz;
+} ANYCORE_Transform3Df;
 
 typedef struct {
-    double* posx;
-    double* posy;
-    double* posz;
+    double posx;
+    double posy;
+    double rotz;
+    double scax;
+    double scay;
+} ANYCORE_Transform2Dd;
 
-    double* rotx;
-    double* roty;
-    double* rotz;
+typedef struct {
+    double posx;
+    double posy;
+    double posz;
 
-    double* scax;
-    double* scay;
-    double* scaz;
-} ANYCORE_TransformChunk3Dd;
+    double rotx;
+    double roty;
+    double rotz;
+
+    double scax;
+    double scay;
+    double scaz;
+} ANYCORE_Transform3Dd;
 
 typedef struct {
     uint32_t* dirties;
