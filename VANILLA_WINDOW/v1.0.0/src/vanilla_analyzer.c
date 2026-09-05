@@ -122,9 +122,7 @@ void VANILLA_analyzeStream(void) {
                 
                 int isLive = (sc->validFlags[wordIdx] & (1u << bitIdx)) ? 1 : 0;
 
-                if (((dc->createFlags[wordIdx] & (1u << bitIdx)) ? 1 : 0) && (scc->generations[slotIdx] != sc->generations[slotIdx])) {
-                    StandardComponent_remove(&materialComponent, (EntityID){ slotIdx, sc->generations[slotIdx] });
-                }
+                VANILLA_GPUMaterialSlot* gpuMaterial = &((VANILLA_GPUMaterialSlot*)vulkan.mappedMaterialSlotBufferPtr)[absoluteIdx];
 
                 ModelLookup* lookupTable = vulkan.mappedModelLookupPtr;
                 if(vulkan.mappedModelLookupPtr == NULL) {
@@ -217,7 +215,7 @@ void VANILLA_analyzeStream(void) {
                     renderMatrix.m[14] = pz;
 
                     gpuIndirectCommands[absoluteIdx].indexCount    = lookupTable[modelIndex].indexCount;
-                    gpuIndirectCommands[absoluteIdx].instanceCount = 1;
+                    gpuIndirectCommands[absoluteIdx].instanceCount = ((gpuMaterial->flags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) != 0u) ? 0 : 1;
                     gpuIndirectCommands[absoluteIdx].firstIndex    = lookupTable[modelIndex].firstIndex;
                     gpuIndirectCommands[absoluteIdx].vertexOffset  = (int32_t)lookupTable[modelIndex].firstVertex;
                     gpuIndirectCommands[absoluteIdx].firstInstance = absoluteIdx;

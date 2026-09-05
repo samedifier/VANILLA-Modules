@@ -169,6 +169,8 @@ typedef struct {
     TextureID normal;
     SamplerID sampler;
 
+    uint32_t flags;
+
     Vec4f baseColor;
 
     float metallic;
@@ -176,9 +178,10 @@ typedef struct {
 } VANILLA_MaterialCreateInfo;
 
 typedef enum {
-    VANILLA_MATERIALFLAGS1_USE_MATERIAL = 1u << 2,
-    VANILLA_MATERIALFLAGS1_MAKE_UI      = 1u << 1
-} VANILLA_MaterialFlags1;
+    VANILLA_ENTITYFLAGS1_NO_RENDER    = 1u << 2,
+    VANILLA_ENTITYFLAGS1_MAKE_UI      = 1u << 1,
+    VANILLA_ENTITYFLAGS1_USE_MATERIAL = 1u << 0
+} VANILLA_EntityFlags1;
 
 typedef enum {
     VANILLA_PROJECTION_PERSPECTIVE,
@@ -429,7 +432,7 @@ typedef struct {
     VANILLA_RESULT (*destroyMaterial)(MaterialID materialID);
 
     /* Assigns a material and its flags to an entity. */
-    VANILLA_RESULT (*setMaterialComponent)(EntityID entityID, MaterialID materialID, uint32_t materialFlags1, uint32_t materialFlags2, uint32_t materialFlags3);
+    VANILLA_RESULT (*setMaterialComponent)(EntityID entityID, MaterialID materialID, uint32_t entityFlags1, uint32_t entityFlags2, uint32_t entityFlags3);
 
     /* Removes the material component from an entity. */
     VANILLA_RESULT (*removeMaterialComponent)(EntityID entityID);

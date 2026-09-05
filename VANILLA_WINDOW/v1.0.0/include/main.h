@@ -191,6 +191,8 @@ typedef struct {
     TextureID normal;
     SamplerID sampler;
 
+    uint32_t flags;
+
     Vec4f baseColor;
 
     float metallic;
@@ -229,9 +231,10 @@ typedef struct {
 } VANILLA_GPUMaterial;
 
 typedef enum {
-    VANILLA_MATERIALFLAGS1_USE_MATERIAL = 1u << 2,
-    VANILLA_MATERIALFLAGS1_MAKE_UI      = 1u << 1
-} VANILLA_MaterialFlags1;
+    VANILLA_ENTITYFLAGS1_NO_RENDER    = 1u << 2,
+    VANILLA_ENTITYFLAGS1_MAKE_UI      = 1u << 1,
+    VANILLA_ENTITYFLAGS1_USE_MATERIAL = 1u << 0
+} VANILLA_EntityFlags1;
 
 typedef struct {
     uint32_t materialSlot;

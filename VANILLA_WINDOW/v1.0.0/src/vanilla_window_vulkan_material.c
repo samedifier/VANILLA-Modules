@@ -289,17 +289,9 @@ void VANILLA_VK_destroyMaterialBuffer(void) {
     VANILLA_VK_destroyMaterialUploadBuffer();
 }
 
-VANILLA_EXPORT VANILLA_RESULT VANILLA_createMaterial(
-    const VANILLA_MaterialCreateInfo materialCreateInfo,
-    MaterialID* outMaterialID
-) {
-    if (!outMaterialID) {
-        return VANILLA_ERR_NULL_POINTER;
-    }
-
-    if (vulkan.materialFreeSlotCount == 0) {
-        return VANILLA_ERR_CAPACITY_REACHED;
-    }
+VANILLA_EXPORT VANILLA_RESULT VANILLA_createMaterial(const VANILLA_MaterialCreateInfo materialCreateInfo, MaterialID* outMaterialID) {
+    if (!outMaterialID) { return VANILLA_ERR_NULL_POINTER; }
+    if (vulkan.materialFreeSlotCount == 0) { return VANILLA_ERR_CAPACITY_REACHED; }
 
     uint32_t slot = vulkan.materialFreeSlots[--vulkan.materialFreeSlotCount];
 
@@ -309,93 +301,60 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_createMaterial(
     material.normalSlot = materialCreateInfo.normal.slot;
     material.samplerSlot = materialCreateInfo.sampler.slot;
 
+    material.flags = materialCreateInfo.flags | 1;
+
     material.baseColor = materialCreateInfo.baseColor;
 
     material.metallic = materialCreateInfo.metallic;
     material.roughness = materialCreateInfo.roughness;
 
-    material.flags |= 1UL;
-
     ((VANILLA_GPUMaterial*)vulkan.mappedMaterialBufferPtr)[slot] = material;
-
-    if (slot > vulkan.currentMaterialOffset) {
-        vulkan.currentMaterialOffset = slot + 1;
-    }
+    if (slot > vulkan.currentMaterialOffset) { vulkan.currentMaterialOffset = slot + 1; }
 
     vulkan.materialCopy = (VkBufferCopy){
         .srcOffset = 0,
         .dstOffset = 0,
-        .size = (VkDeviceSize)(
-            vulkan.currentMaterialOffset * sizeof(VANILLA_GPUMaterial)
-        )
+        .size = (VkDeviceSize)(vulkan.currentMaterialOffset * sizeof(VANILLA_GPUMaterial))
     };
 
-    *outMaterialID = (MaterialID){
-        slot,
-        ++vulkan.materialGenerations[slot]
-    };
-
+    *outMaterialID = (MaterialID){ slot, ++vulkan.materialGenerations[slot] };
     return VANILLA_SUCCESS;
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_destroyMaterial(MaterialID materialID) {
-    if (materialID.slot >= materialLimit) {
-        return VANILLA_ERR_INVALID_MATERIAL;
-    }
+    if (materialID.slot >= materialLimit) { return VANILLA_ERR_INVALID_MATERIAL; }
+    
+    if (vulkan.materialGenerations[materialID.slot] != materialID.generation) { return VANILLA_ERR_INVALID_MATERIAL; }
+    VANILLA_GPUMaterial* material = &((VANILLA_GPUMaterial*)vulkan.mappedMaterialBufferPtr)[materialID.slot];
 
-    if (vulkan.materialGenerations[materialID.slot] != materialID.generation) {
-        return VANILLA_ERR_INVALID_MATERIAL;
-    }
+    material->flags &= ~1;
 
-    VANILLA_GPUMaterial* material =
-        &((VANILLA_GPUMaterial*)vulkan.mappedMaterialBufferPtr)[materialID.slot];
-
-    material->flags &= ~1UL;
-
-    vulkan.materialFreeSlots[vulkan.materialFreeSlotCount++] =
-        materialID.slot;
-
+    vulkan.materialFreeSlots[vulkan.materialFreeSlotCount++] = materialID.slot;
     return VANILLA_SUCCESS;
 }
 
-VANILLA_EXPORT VANILLA_RESULT VANILLA_setMaterialComponent(
-    EntityID entityID,
-    MaterialID materialID,
-    uint32_t materialFlags1,
-    uint32_t materialFlags2,
-    uint32_t materialFlags3
-) {
-    if (materialID.slot >= materialLimit) {
-        return VANILLA_ERR_INVALID_MATERIAL;
-    }
-
-    if (vulkan.materialGenerations[materialID.slot] != materialID.generation) {
-        return VANILLA_ERR_INVALID_MATERIAL;
-    }
+VANILLA_EXPORT VANILLA_RESULT VANILLA_setMaterialComponent(EntityID entityID, MaterialID materialID, uint32_t entityFlags1, uint32_t entityFlags2, uint32_t entityFlags3) {
+    if (materialID.slot >= materialLimit) { return VANILLA_ERR_INVALID_MATERIAL; }
+    if (vulkan.materialGenerations[materialID.slot] != materialID.generation) { return VANILLA_ERR_INVALID_MATERIAL; }
 
     if (!StandardComponent_has(&materialComponent, entityID)) {
-        StandardComponent_RESULT result =
-            StandardComponent_add(&materialComponent, entityID);
-
-        if (result != STANDARDCOMPONENT_SUCCESS) {
-            return VANILLA_ERR_ADD_MATERIAL_COMPONENT;
-        }
+        StandardComponent_RESULT result = StandardComponent_add(&materialComponent, entityID);
+        if (result != STANDARDCOMPONENT_SUCCESS) { return VANILLA_ERR_ADD_MATERIAL_COMPONENT; }
     }
 
-    VANILLA_GPUMaterialSlot* gpuMaterial =
-        &((VANILLA_GPUMaterialSlot*)vulkan.mappedMaterialSlotBufferPtr)[entityID.slot];
-
-    if (StandardComponent_setData(&materialComponent, entityID, &materialID) != STANDARDCOMPONENT_SUCCESS) {
-        return VANILLA_ERR_ADD_MATERIAL_COMPONENT;
-    }
+    VANILLA_GPUMaterialSlot* gpuMaterial = &((VANILLA_GPUMaterialSlot*)vulkan.mappedMaterialSlotBufferPtr)[entityID.slot];
+    if (StandardComponent_setData(&materialComponent, entityID, &materialID) != STANDARDCOMPONENT_SUCCESS) { return VANILLA_ERR_ADD_MATERIAL_COMPONENT; }
 
     if (vulkan.maxmcslot < entityID.slot) { vulkan.maxmcslot = entityID.slot; }
 
     gpuMaterial->materialSlot = materialID.slot;
-    gpuMaterial->flags1 = materialFlags1;
-    gpuMaterial->flags2 = materialFlags2;
-    gpuMaterial->flags3 = materialFlags3;
+    gpuMaterial->flags1 = entityFlags1;
+    gpuMaterial->flags2 = entityFlags2;
+    gpuMaterial->flags3 = entityFlags3;
 
+    VkDrawIndexedIndirectCommand* gpuIndirectCommands = (VkDrawIndexedIndirectCommand*)vulkan.mappedIndirectCommands;
+    gpuIndirectCommands[entityID.slot].instanceCount = ((entityFlags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) != 0u) ? 0 : 1;
+    
     return VANILLA_SUCCESS;
 }
 
@@ -404,6 +363,11 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_removeMaterialComponent(EntityID entityID)
     if (StandardComponent_remove(&materialComponent, entityID) != STANDARDCOMPONENT_SUCCESS) {
         return VANILLA_ERR_REMOVE_MATERIAL_COMPONENT;
     }
+
+    VANILLA_GPUMaterialSlot* gpuMaterial = &((VANILLA_GPUMaterialSlot*)vulkan.mappedMaterialSlotBufferPtr)[entityID.slot];
+    gpuMaterial->flags1 = 0;
+    gpuMaterial->flags2 = 0;
+    gpuMaterial->flags3 = 0;
 
     return VANILLA_SUCCESS;
 }

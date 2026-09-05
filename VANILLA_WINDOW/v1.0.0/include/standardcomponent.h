@@ -22,7 +22,6 @@
 #include <sys/mman.h>
 
 #define STANDARDCOMPONENT_mmap(size) mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)
-
 #define STANDARDCOMPONENT_munmap(ptr, size) munmap(ptr, size)
 
 #define STANDARDCOMPONENT_MAP_FAILED MAP_FAILED
