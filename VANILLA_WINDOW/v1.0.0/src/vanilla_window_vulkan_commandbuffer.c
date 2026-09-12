@@ -286,7 +286,12 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
 
     VANILLA_MATH_multiply(&viewProj, &proj, &view);
 
-    VANILLA_CameraPush campush = { viewProj, aspect, 0.0f, 0.0f, 0.0f };
+    VANILLA_CameraPush campush = {
+        .viewProjection = viewProj,
+        .aspectRatio = aspect,
+        .uioffset = { camera.uioffsetx, camera.uioffsety },
+        ._padding1 = 0
+    };
 
     vkCmdPushConstants(
         commandBuffer,

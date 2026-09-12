@@ -392,6 +392,9 @@ typedef struct {
     /* Sets the camera position. */
     void (*setCameraPosition)(Vec3f position);
 
+    /* Sets the camera UI offset. */
+    void (*setCameraUIOffset)(float offsetx, float offsety);
+
     /* Sets the camera target. */
     void (*setCameraTarget)(Vec3f target);
 
@@ -519,6 +522,7 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
     VANILLA_DLSYM(libHandle, "VANILLA_disableVSync", w->disableVSync);
 
     VANILLA_DLSYM(libHandle, "VANILLA_setCameraPosition", w->setCameraPosition);
+    VANILLA_DLSYM(libHandle, "VANILLA_setCameraUIOffset", w->setCameraUIOffset);
     VANILLA_DLSYM(libHandle, "VANILLA_setCameraTarget", w->setCameraTarget);
     VANILLA_DLSYM(libHandle, "VANILLA_setCameraUp", w->setCameraUp);
 

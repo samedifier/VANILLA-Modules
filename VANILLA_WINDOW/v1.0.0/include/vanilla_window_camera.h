@@ -24,6 +24,9 @@ typedef struct {
     float fov;
     float nearPlane;
     float farPlane;
+    
+    float uioffsetx;
+    float uioffsety;
 } VANILLA_Camera;
 
 extern VANILLA_Camera camera;

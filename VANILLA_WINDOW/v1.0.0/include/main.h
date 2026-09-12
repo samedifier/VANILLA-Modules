@@ -92,9 +92,8 @@ typedef struct {
 typedef struct {
     mat4 viewProjection;
     float aspectRatio;
+    float uioffset[2];
     float _padding1;
-    float _padding2;
-    float _padding3;
 } VANILLA_CameraPush;
 
 typedef struct { ID32 slot; ID16 generation; } TextureID;
