@@ -19,6 +19,7 @@
 #include "vanilla_window_glfw.h"
 
 bool VANILLA_GLFW_init(void);
+void VANILLA_GLFW_pollEvents(void);
 VANILLA_RESULT VANILLA_GLFW_createWindow(unsigned int width, unsigned int height);
 void VANILLA_GLFW_shutdown(void);
 

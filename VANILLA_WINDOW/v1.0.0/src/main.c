@@ -419,7 +419,6 @@ VANILLA_EXPORT void start(uint32_t buildid) {
 }
 
 static bool onceinloop = false;
-
 VANILLA_EXPORT void loop() {
     if (didstart == false) { return; }
     if (onceinloop == false) {
@@ -484,7 +483,7 @@ VANILLA_EXPORT void loop() {
     }
 
     VANILLA_VK_drawFrame();
-    VANILLA_InputPoll();
+    VANILLA_GLFW_pollEvents();
 
     onceinloop = true;
 }
@@ -707,50 +706,6 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_setSamplerLimit(uint32_t limit) {
 
 VANILLA_EXPORT uint32_t VANILLA_getVersion() { return VANILLA_VERSION; }
 
-VANILLA_EXPORT const char* VANILLA_getWindowTitle(void) {
-    return windowTitle;
-}
-
-VANILLA_EXPORT void VANILLA_getWindowSize(unsigned int* width, unsigned int* height) {
-    if (width == NULL || height == NULL) { return; }
-
-    if (width)  { *width  = windowWidth; }
-    if (height) { *height = windowHeight; }
-}
-
-VANILLA_EXPORT void VANILLA_getWindowPosition(unsigned int* x, unsigned int* y) {
-    if (x == NULL || y == NULL) { return; }
-
-    if (x) { *x = windowPositionX; }
-    if (y) { *y = windowPositionY; }
-}
-
-VANILLA_EXPORT void VANILLA_getCursorPosition(unsigned int* x, unsigned int* y) {
-    if (x == NULL || y == NULL) { return; }
-
-    double dx, dy;
-    glfwGetCursorPos(g_glfw.window, &dx, &dy);
-
-    if (x) { *x = (unsigned int)dx; }
-    if (y) { *y = (unsigned int)dy; }
-}
-VANILLA_EXPORT bool VANILLA_isWindowVisible(void) {
-    return showWindow;
-}
-
-VANILLA_EXPORT void VANILLA_getMonitorSize(unsigned int* width, unsigned int* height) {
-    if (width == NULL || height == NULL) { return; }
-
-    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-
-    unsigned int monitorWidth = mode->width;
-    unsigned int monitorHeight = mode->height;
-
-    if (width)  { *width  = monitorWidth;  }
-    if (height) { *height = monitorHeight; }
-}
-
 VANILLA_EXPORT uint64_t VANILLA_getVertexLimit(void) {
     return vertexLimit;
 }
@@ -766,3 +721,4 @@ VANILLA_EXPORT VANILLA_MemoryMode VANILLA_getMemoryMode(void) {
 VANILLA_EXPORT bool VANILLA_isVSyncEnabled(void) {
     return enableVSync;
 }
+

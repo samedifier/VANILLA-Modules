@@ -464,6 +464,9 @@ typedef struct {
     /* Returns the current window title. */
     const char* (*getWindowTitle)(void);
 
+    /* Returns all characters received during the current frame. */
+    const uint16_t* (*getTextInput)(uint32_t* outCount);
+
     /* Retrieves the current window size. */
     void (*getWindowSize)(unsigned int* width, unsigned int* height);
 
@@ -558,8 +561,9 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
     VANILLA_DLSYM(libHandle, "VANILLA_getWindowSize", w->getWindowSize);
     VANILLA_DLSYM(libHandle, "VANILLA_getWindowPosition", w->getWindowPosition);
 
-    VANILLA_DLSYM(libHandle, "VANILLA_getCursorPosition", w->getCursorPosition);
+    VANILLA_DLSYM(libHandle, "VANILLA_getTextInput", w->getTextInput);
 
+    VANILLA_DLSYM(libHandle, "VANILLA_getCursorPosition", w->getCursorPosition);
     VANILLA_DLSYM(libHandle, "VANILLA_isWindowVisible", w->isWindowVisible);
     VANILLA_DLSYM(libHandle, "VANILLA_getMonitorSize", w->getMonitorSize);
 
@@ -575,7 +579,7 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
 static inline void VANILLA_WINDOW_injectWrapper(VANILLA_WINDOW_Wrapper* w, void* behaviourHandle) {
     void (*injectWrapper)(void*) = NULL;
     VANILLA_DLSYM(behaviourHandle, "injectVANILLAWINDOWWrapper", injectWrapper);
-    if (injectWrapper) injectWrapper(w);
+    if (injectWrapper) { injectWrapper(w); }
 }
 
 #endif // VANILLA_WINDOW_WRAPPER_H

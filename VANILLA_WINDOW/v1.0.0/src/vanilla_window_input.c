@@ -304,10 +304,6 @@ void VANILLA_InputInit(void* window) {
     glfwSetCursorPosCallback(glfwWindow, VANILLA_InputCursorPosCallback);
 }
 
-void VANILLA_InputPoll(void) {
-    glfwPollEvents();
-}
-
 VANILLA_EXPORT void VANILLA_inputDispatch(void) {
     uint32_t i = 0;
 

@@ -20,7 +20,6 @@
 
 void VANILLA_InputInit(void* window);
 void VANILLA_InputFree(void);
-void VANILLA_InputPoll(void);
 
 VANILLA_EXPORT void VANILLA_inputDispatch(void);
 VANILLA_EXPORT bool VANILLA_bindInputEvent(VANILLA_InputEvent event, void (*function)(VANILLA_InputState), EventBindID* outBindID);
