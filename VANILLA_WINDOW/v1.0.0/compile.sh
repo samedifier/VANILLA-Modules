@@ -14,6 +14,7 @@ rm -rf build; mkdir build
 
 $CC -shared -fPIC \
     $CORE_SRC/main.c \
+    $CORE_SRC/vanilla_analyzer.c \
     $CORE_SRC/vanilla_window_glfw.c \
     $CORE_SRC/vanilla_window_vulkan_instance.c \
     $CORE_SRC/vanilla_window_vulkan_surface.c \
@@ -21,11 +22,11 @@ $CC -shared -fPIC \
     $CORE_SRC/vanilla_window_vulkan_swapchain.c \
     $CORE_SRC/vanilla_window_vulkan_pipelinelayout.c \
     $CORE_SRC/vanilla_window_vulkan_pipeline.c \
+    $CORE_SRC/vanilla_window_vulkan_postprocessing.c \
     $CORE_SRC/vanilla_window_vulkan_commandpool.c \
     $CORE_SRC/vanilla_window_vulkan_commandbuffer.c \
     $CORE_SRC/vanilla_window_vulkan_sync.c \
     $CORE_SRC/vanilla_window_vulkan_draw.c \
-    $CORE_SRC/vanilla_analyzer.c \
     $CORE_SRC/vanilla_window_vulkan_buffers.c \
     $CORE_SRC/vanilla_window_vulkan_descriptor.c \
     $CORE_SRC/vanilla_window_vulkan_depth.c \

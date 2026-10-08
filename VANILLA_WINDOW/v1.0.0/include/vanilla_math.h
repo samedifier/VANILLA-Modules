@@ -114,7 +114,6 @@ static inline void VANILLA_MATH_lookAt(mat4* out, float eye_x, float eye_y, floa
 
 static inline void VANILLA_MATH_multiply(mat4* out, const mat4* a, const mat4* b) {
     mat4 tmp;
-
     for (int c = 0; c < 4; c++) {
         for (int r = 0; r < 4; r++) {
             tmp.m[c * 4 + r] =
@@ -124,7 +123,6 @@ static inline void VANILLA_MATH_multiply(mat4* out, const mat4* a, const mat4* b
                 a->m[3 * 4 + r] * b->m[c * 4 + 3];
         }
     }
-
     *out = tmp;
 }
 

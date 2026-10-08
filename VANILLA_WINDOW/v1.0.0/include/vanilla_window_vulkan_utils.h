@@ -44,10 +44,22 @@ void VANILLA_VK_destroyImageViews(void);
 int VANILLA_VK_createPipelineLayout(void);
 void VANILLA_VK_destroyPipelineLayout(void);
 
+int VANILLA_VK_createPostProcessingPipelineLayout(void);
+void VANILLA_VK_destroyPostProcessingPipelineLayout(void);
+
 VkPipelineVertexInputStateCreateInfo VANILLA_makePipelineVertexInput(VkVertexInputBindingDescription* outBindingDesc, VkVertexInputAttributeDescription* outAttrDescs);
 
 int VANILLA_VK_createPipeline(void);
 void VANILLA_VK_destroyPipeline(void);
+
+int VANILLA_VK_createPostProcessingPipeline(void);
+void VANILLA_VK_destroyPostProcessingPipeline(void);
+
+int  VANILLA_VK_createPipelineImages(void);
+void VANILLA_VK_destroyPipelineImages(void);
+
+int VANILLA_VK_createPostProcessingImages(void);
+void VANILLA_VK_destroyPostProcessingImages(void);
 
 int VANILLA_VK_createCommandPool(void);
 void VANILLA_VK_destroyCommandPool(void);
@@ -69,9 +81,13 @@ void VANILLA_CleanupPersistentBuffers(VkDevice device);
 void VANILLA_ExtractAndPushModel(uint32_t modelIndex, void* anycoreModelBuffer, uint32_t vertexCount, void* anycoreIndexBuffer, uint32_t indexCount, uint32_t maxModelIndex, VANILLA_VertexLayout* layout);
 void VANILLA_redoModel(uint32_t modelIndex, void* anycoreModelBuffer, uint32_t vertexCount, void* anycoreIndexBuffer, uint32_t indexCount, VANILLA_VertexLayout* layout);
 
-VkDescriptorSetLayout VANILLA_CreateDescriptorSetLayout(void);
+int VANILLA_CreateDescriptorSetLayout(void);
 int VANILLA_CreateDescriptor(void);
 void VANILLA_CleanupDescriptorLayout(void);
+
+int VANILLA_CreatePostProcessingDescriptorSetLayout(void);
+int VANILLA_CreatePostProcessingDescriptor(void);
+void VANILLA_CleanupPostProcessingDescriptor(void);
 
 int VANILLA_VK_initIndirectBuffer(void);
 void VANILLA_VK_cleanupIndirectBuffer(void);
@@ -81,11 +97,11 @@ void VANILLA_VK_destroyDepthResources(void);
 
 ///
 
-int createDefaultTexture();
+int createDefaultTexture(void);
 int VANILLA_VK_textureinit(void);
 void VANILLA_VK_texturefree(void);
 
-int createDefaultSampler();
+int createDefaultSampler(void);
 int VANILLA_initSamplers(void);
 void VANILLA_destroySamplers(void);
 
@@ -99,37 +115,49 @@ static inline int VANILLA_VK_init() {
     if (VANILLA_VK_createSurface()) { return 1; }
     if (VANILLA_VK_pickPhysicalDevice()) { return 1; }
     if (VANILLA_VK_createLogicalDevice()) { return 1; }
+
     if (VANILLA_VK_textureinit()) { return 1; }
     if (VANILLA_initSamplers()) { return 1; }
+
     if (VANILLA_VK_createMaterialBuffer()) { return 1; }
     if (VANILLA_VK_createSwapchain(VK_NULL_HANDLE)) { return 1; }
     if (VANILLA_VK_createImageViews()) { return 1; }
     if (VANILLA_InitializePersistentBuffers(vulkan.device, vulkan.physicalDevice)) { return 1; }
 
-    uint32_t maxTotalEntities = stream->chunkLimit * CHUNKSIZE;
-    size_t allocationSize = maxTotalEntities * sizeof(uint32_t);
-
-    vulkan.vramModelList = (uint32_t*)VANILLA_mmap(allocationSize);
-
-    if (vulkan.vramModelList == NULL) {
-        printf("[VULKAN] vrammodellist\n");
-        return 1;
-    }
-
-    memset(vulkan.vramModelList, 0, allocationSize);
-    vulkan.vramActiveCount = 0;
-
-    vulkan.descriptorSetLayout = VANILLA_CreateDescriptorSetLayout();
+    if (VANILLA_CreateDescriptorSetLayout()) { return 1; }
 
     if (VANILLA_VK_createPipelineLayout()) { return 1; }
     if (VANILLA_VK_createPipeline()) { return 1; }
+
     if (VANILLA_VK_createDepthResources()) { return 1; }
     if (VANILLA_VK_createCommandPool()) { return 1; }
     if (VANILLA_VK_initIndirectBuffer()) { return 1; }
     if (VANILLA_VK_createCommandBuffers()) { return 1; }
+
+    if (createDefaultTexture() != 0) {
+        printf("[VANILLA WINDOW] default texture create error\n");
+        return 1;
+    }
+    if (createDefaultSampler() != 0) {
+        printf("[VANILLA WINDOW] default sampler create error\n");
+        return 1;
+    }
+
     if (VANILLA_VK_createSyncObjects()) { return 1; }
 
-    printf("[VANILLA WINDOW] initalized without an error\n");
+    if (enablePostProcessing) {
+        if (VANILLA_VK_createPipelineImages()) { return 1; }
+        if (VANILLA_VK_createPostProcessingImages()) { return 1; }
+
+        if (VANILLA_CreatePostProcessingDescriptorSetLayout()) { return 1; }
+
+        if (vulkan.postProcessingDescriptorSetLayout == VK_NULL_HANDLE) {
+            return 1;
+        }
+
+        if (VANILLA_VK_createPostProcessingPipelineLayout()) { return 1; }
+        if (VANILLA_VK_createPostProcessingPipeline()) { return 1; }
+    }
 
     return 0;
 }

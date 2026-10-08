@@ -41,15 +41,174 @@ int VANILLA_VK_createCommandBuffers(void) {
     return 0;
 }
 
+static void VANILLA_VK_recordPipelinePass(VkCommandBuffer commandBuffer, uint16_t pipelineIndex, const VkClearColorValue* clearColor, const VANILLA_CameraPush* campush, const VkViewport* viewport, const VkRect2D* scissor) {
+    const uint32_t entityCapacity = stream->chunkLimit * CHUNKSIZE;
+    const VkDeviceSize indirectStride = sizeof(VkDrawIndexedIndirectCommand);
+
+    VkBuffer vertexBuffers[] = { vulkan.globalVertexBuffer };
+
+    VkDeviceSize offsets[] = {0};
+
+    VkMemoryBarrier2 depthMemoryBarrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+        .srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+        .dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+    };
+
+    VkImageMemoryBarrier2 imageBarrierToAttachment = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = vulkan.pipelineImages[pipelineIndex],
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    VkDependencyInfo dependencyToAttachment = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &depthMemoryBarrier,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &imageBarrierToAttachment
+    };
+
+    vkCmdPipelineBarrier2(commandBuffer, &dependencyToAttachment);
+
+    VkRenderingAttachmentInfo colorAttachment = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = vulkan.pipelineImageViews[pipelineIndex],
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .resolveMode = VK_RESOLVE_MODE_NONE,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue.color = *clearColor
+    };
+
+    VkRenderingAttachmentInfo depthAttachment = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = vulkan.depthImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .resolveMode = VK_RESOLVE_MODE_NONE,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue.depthStencil = { 1.0f, 0 }
+    };
+
+    VkRenderingInfo renderingInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = { .offset = {0, 0}, .extent = vulkan.swapchainExtent },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+        .pDepthAttachment = &depthAttachment,
+        .pStencilAttachment = NULL
+    };
+
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+    vkCmdPushConstants(
+        commandBuffer,
+        vulkan.pipelineLayout,
+        VK_SHADER_STAGE_VERTEX_BIT,
+        0,
+        sizeof(VANILLA_CameraPush),
+        campush
+    );
+
+    vkCmdSetViewport(commandBuffer, 0, 1, viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, scissor);
+
+    vkCmdBindVertexBuffers(
+        commandBuffer,
+        0,
+        1,
+        vertexBuffers,
+        offsets
+    );
+
+    vkCmdBindIndexBuffer(
+        commandBuffer,
+        vulkan.globalIndexBuffer,
+        0,
+        VK_INDEX_TYPE_UINT32
+    );
+
+    vkCmdBindDescriptorSets(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        vulkan.pipelineLayout,
+        0,
+        1,
+        &vulkan.descriptorSet,
+        0,
+        NULL
+    );
+
+    vkCmdBindPipeline(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        vulkan.pipelines[pipelineIndex]
+    );
+
+    const VkDeviceSize pipelineOffset = (VkDeviceSize)pipelineIndex * entityCapacity * indirectStride;
+
+    vkCmdDrawIndexedIndirect(
+        commandBuffer,
+        vulkan.indirectCommandBuffer,
+        pipelineOffset,
+        entityCapacity,
+        (uint32_t)indirectStride
+    );
+
+    vkCmdEndRendering(commandBuffer);
+
+    VkImageMemoryBarrier2 imageBarrierToShader = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = vulkan.pipelineImages[pipelineIndex],
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    VkDependencyInfo dependencyToShader = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &imageBarrierToShader
+    };
+    vkCmdPipelineBarrier2(commandBuffer, &dependencyToShader);
+}
+
 int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCount) {
     VkCommandBuffer commandBuffer = vulkan.commandBuffers[imageIndex];
 
     vkResetCommandBuffer(commandBuffer, 0);
 
-    VkCommandBufferBeginInfo beginInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-    };
-
+    VkCommandBufferBeginInfo beginInfo = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) { return 1; }
 
     if (vulkan.mappedUploadTransformBufferPtr != NULL) {
@@ -119,6 +278,8 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
             .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
             .dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.globalVertexBuffer,
             .size = VK_WHOLE_SIZE
         },
@@ -128,6 +289,8 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
             .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
             .dstAccessMask = VK_ACCESS_2_INDEX_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.globalIndexBuffer,
             .size = VK_WHOLE_SIZE
         },
@@ -137,6 +300,8 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
             .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.globalTransformBuffer,
             .size = VK_WHOLE_SIZE
         },
@@ -146,15 +311,19 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
             .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.modelLookupBuffer,
             .size = VK_WHOLE_SIZE
         },
         {
             .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-            .srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
             .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.materialBuffer,
             .size = VK_WHOLE_SIZE
         },
@@ -164,7 +333,21 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
             .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .buffer = vulkan.materialSlotBuffer,
+            .size = VK_WHOLE_SIZE
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+            .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+            .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = vulkan.indirectCommandBuffer,
+            .offset = 0,
             .size = VK_WHOLE_SIZE
         }
     };
@@ -176,7 +359,10 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
         .pBufferMemoryBarriers = barriers
     };
 
-    vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+    vkCmdPipelineBarrier2(
+        commandBuffer,
+        &dependencyInfo
+    );
 
     vulkan.vertexBufferCopy.size = 0;
     vulkan.indexBufferCopy.size = 0;
@@ -186,50 +372,10 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
 
     vulkan.maxmcslot = 0;
 
-    VkRenderingAttachmentInfo colorAttachment = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = vulkan.imageViews[imageIndex],
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .resolveMode = VK_RESOLVE_MODE_NONE,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue.color = { .float32 = { 0.7f, 0.7f, 0.7f, 1.0f } }
-    };
-
-    VkRenderingAttachmentInfo depthAttachment = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = vulkan.depthImageView,
-        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        .resolveMode = VK_RESOLVE_MODE_NONE,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue.depthStencil = { 1.0f, 0 }
-    };
-
-    VkRenderingInfo renderingInfo = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {
-            .offset = {0, 0},
-            .extent = vulkan.swapchainExtent
-        },
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachment,
-        .pDepthAttachment = &depthAttachment,
-        .pStencilAttachment = NULL
-    };
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
-
-    vkCmdBindPipeline(
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        vulkan.pipeline
-    );
-
     mat4 proj = {0};
     mat4 view;
     mat4 viewProj;
+
     float aspect = (float)vulkan.swapchainExtent.width / (float)vulkan.swapchainExtent.height;
 
     switch (projectionType) {
@@ -242,10 +388,10 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
                 camera.farPlane
             );
             break;
-
-        case VANILLA_PROJECTION_ORTHOGRAPHIC:                
+        case VANILLA_PROJECTION_ORTHOGRAPHIC: {
             float height = orthographicSize;
             float width = height * aspect;
+
             VANILLA_MATH_orthographic(
                 &proj,
                 -width * 0.5f,
@@ -256,7 +402,7 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
                 camera.farPlane
             );
             break;
-        
+        }
         default:
             VANILLA_MATH_perspective(
                 &proj,
@@ -284,7 +430,11 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
         camera.upz
     );
 
-    VANILLA_MATH_multiply(&viewProj, &proj, &view);
+    VANILLA_MATH_multiply(
+        &viewProj,
+        &proj,
+        &view
+    );
 
     VANILLA_CameraPush campush = {
         .viewProjection = viewProj,
@@ -292,15 +442,6 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
         .uioffset = { camera.uioffsetx, camera.uioffsety },
         ._padding1 = 0
     };
-
-    vkCmdPushConstants(
-        commandBuffer,
-        vulkan.pipelineLayout,
-        VK_SHADER_STAGE_VERTEX_BIT,
-        0,
-        sizeof(VANILLA_CameraPush),
-        &campush
-    );
 
     VkViewport viewport = {
         .x = 0.0f,
@@ -311,59 +452,327 @@ int VANILLA_VK_recordCommandBuffer(uint32_t imageIndex, uint32_t activeEntityCou
         .maxDepth = 1.0f
     };
 
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-    VkRect2D scissor = {
-        .offset = {0, 0},
-        .extent = vulkan.swapchainExtent
+    VkViewport postProcessViewport = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (float)vulkan.swapchainExtent.width,
+        .height = (float)vulkan.swapchainExtent.height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
     };
-
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
+    VkRect2D scissor = { .offset = {0, 0}, .extent = vulkan.swapchainExtent };
     VkBuffer vertexBuffers[] = { vulkan.globalVertexBuffer };
     VkDeviceSize offsets[] = {0};
 
-    vkCmdBindVertexBuffers(
-        commandBuffer,
-        0,
-        1,
-        vertexBuffers,
-        offsets
-    );
+    const uint32_t entityCapacity = stream->chunkLimit * CHUNKSIZE;
+    const VkDeviceSize indirectStride = sizeof(VkDrawIndexedIndirectCommand);
 
-    vkCmdBindIndexBuffer(
-        commandBuffer,
-        vulkan.globalIndexBuffer,
-        0,
-        VK_INDEX_TYPE_UINT32
-    );
+    if (!enablePostProcessing) {
+        VkRenderingAttachmentInfo colorAttachment = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = vulkan.imageViews[imageIndex],
+            .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .resolveMode = VK_RESOLVE_MODE_NONE,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue.color = {
+                .float32 = {
+                    0.7f,
+                    0.7f,
+                    0.7f,
+                    1.0f
+                }
+            }
+        };
 
-    vkCmdBindDescriptorSets(
-        commandBuffer,
-        VK_PIPELINE_BIND_POINT_GRAPHICS,
-        vulkan.pipelineLayout,
-        0,
-        1,
-        &vulkan.descriptorSet,
-        0,
-        NULL
-    );
+        VkRenderingAttachmentInfo depthAttachment = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+            .imageView = vulkan.depthImageView,
+            .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            .resolveMode = VK_RESOLVE_MODE_NONE,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .clearValue.depthStencil = { 1.0f, 0 }
+        };
 
-    if (vulkan.vramActiveCount > 0) {
-        vkCmdDrawIndexedIndirect(
+        VkRenderingInfo renderingInfo = {
+            .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+            .renderArea = {
+                .offset = {0, 0},
+                .extent = vulkan.swapchainExtent
+            },
+            .layerCount = 1,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &colorAttachment,
+            .pDepthAttachment = &depthAttachment,
+            .pStencilAttachment = NULL
+        };
+
+        vkCmdBeginRendering(
             commandBuffer,
-            vulkan.indirectCommandBuffer,
-            0,
-            vulkan.vramActiveCount,
-            sizeof(VkDrawIndexedIndirectCommand)
+            &renderingInfo
         );
+
+        vkCmdPushConstants(
+            commandBuffer,
+            vulkan.pipelineLayout,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            0,
+            sizeof(VANILLA_CameraPush),
+            &campush
+        );
+
+        vkCmdSetViewport(
+            commandBuffer,
+            0,
+            1,
+            &viewport
+        );
+
+        vkCmdSetScissor(
+            commandBuffer,
+            0,
+            1,
+            &scissor
+        );
+
+        vkCmdBindVertexBuffers(
+            commandBuffer,
+            0,
+            1,
+            vertexBuffers,
+            offsets
+        );
+
+        vkCmdBindIndexBuffer(
+            commandBuffer,
+            vulkan.globalIndexBuffer,
+            0,
+            VK_INDEX_TYPE_UINT32
+        );
+
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            vulkan.pipelineLayout,
+            0,
+            1,
+            &vulkan.descriptorSet,
+            0,
+            NULL
+        );
+
+        for (uint16_t pipelineIndex = 0; pipelineIndex < vulkan.pipelineCount; pipelineIndex++) {
+            vkCmdBindPipeline(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                vulkan.pipelines[pipelineIndex]
+            );
+
+            const VkDeviceSize pipelineOffset = (VkDeviceSize)pipelineIndex * entityCapacity * indirectStride;
+
+            vkCmdDrawIndexedIndirect(
+                commandBuffer,
+                vulkan.indirectCommandBuffer,
+                pipelineOffset,
+                entityCapacity,
+                (uint32_t)indirectStride
+            );
+        }
+
+        vkCmdEndRendering(commandBuffer);
+    }
+    else {
+        const VkClearColorValue sceneClear = {
+            .float32 = {
+                skyColor.x,
+                skyColor.y,
+                skyColor.z,
+                1.0f
+            }
+        };
+
+        const VkClearColorValue layerClear = {
+            .float32 = {
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f
+            }
+        };
+
+        for (uint16_t pipelineIndex = 0; pipelineIndex < vulkan.pipelineCount; pipelineIndex++) {
+            VANILLA_VK_recordPipelinePass(
+                commandBuffer,
+                pipelineIndex,
+                (pipelineIndex == 0) ? &sceneClear : &layerClear,
+                &campush,
+                &viewport,
+                &scissor
+            );
+        }
+
+        if (vulkan.postProcessingCount > 0 && vulkan.postProcessingPipelines != NULL) {
+            for (uint16_t passIndex = 0; passIndex < vulkan.postProcessingCount; passIndex++) {
+                const int isFirstPass = (passIndex == 0);
+                const int isLastPass  = (passIndex == vulkan.postProcessingCount - 1);
+
+                uint32_t inputIndex = 0;
+                uint32_t outputIndex = 0;
+
+                if (!isFirstPass) { inputIndex = (passIndex - 1) % 2; }
+                if (!isLastPass) {
+                    outputIndex = passIndex % 2;
+
+                    VkImageMemoryBarrier2 imageBarrierToAttachment = {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                        .srcStageMask = isFirstPass ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        .srcAccessMask = isFirstPass ? VK_ACCESS_2_NONE : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        .oldLayout = isFirstPass ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                        .image = vulkan.postProcessingImages[outputIndex],
+                        .subresourceRange = {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1
+                        }
+                    };
+
+                    VkDependencyInfo dependencyToAttachment = {
+                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                        .imageMemoryBarrierCount = 1,
+                        .pImageMemoryBarriers = &imageBarrierToAttachment
+                    };
+
+                    vkCmdPipelineBarrier2(
+                        commandBuffer,
+                        &dependencyToAttachment
+                    );
+                }
+
+                VkRenderingAttachmentInfo colorAttachment = {
+                    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                    .imageView = isLastPass ? vulkan.imageViews[imageIndex] : vulkan.postProcessingImageViews[outputIndex],
+                    .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    .resolveMode = VK_RESOLVE_MODE_NONE,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clearValue.color = {
+                        .float32 = {
+                            0.0f,
+                            0.0f,
+                            0.0f,
+                            1.0f
+                        }
+                    }
+                };
+
+                VkRenderingInfo renderingInfo = {
+                    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                    .renderArea = {
+                        .offset = {0, 0},
+                        .extent = vulkan.swapchainExtent
+                    },
+                    .layerCount = 1,
+                    .colorAttachmentCount = 1,
+                    .pColorAttachments = &colorAttachment,
+                    .pDepthAttachment = NULL,
+                    .pStencilAttachment = NULL
+                };
+
+                vkCmdBeginRendering(
+                    commandBuffer,
+                    &renderingInfo
+                );
+
+                vkCmdSetViewport(
+                    commandBuffer,
+                    0,
+                    1,
+                    &postProcessViewport
+                );
+
+                vkCmdSetScissor(
+                    commandBuffer,
+                    0,
+                    1,
+                    &scissor
+                );
+
+                vkCmdBindDescriptorSets(
+                    commandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    vulkan.postProcessingPipelineLayout,
+                    0,
+                    1,
+                    &vulkan.postProcessingDescriptorSet,
+                    0,
+                    NULL
+                );
+
+                vkCmdPushConstants(
+                    commandBuffer,
+                    vulkan.postProcessingPipelineLayout,
+                    VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    sizeof(uint32_t),
+                    &inputIndex
+                );
+
+                vkCmdBindPipeline(
+                    commandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    vulkan.postProcessingPipelines[passIndex]
+                );
+
+                vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+                vkCmdEndRendering(commandBuffer);
+
+                if (!isLastPass) {
+                    VkImageMemoryBarrier2 imageBarrierToShader = {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                        .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                        .image = vulkan.postProcessingImages[outputIndex],
+                        .subresourceRange = {
+                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                            .baseMipLevel = 0,
+                            .levelCount = 1,
+                            .baseArrayLayer = 0,
+                            .layerCount = 1
+                        }
+                    };
+
+                    VkDependencyInfo dependencyToShader = {
+                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                        .imageMemoryBarrierCount = 1,
+                        .pImageMemoryBarriers = &imageBarrierToShader
+                    };
+
+                    vkCmdPipelineBarrier2(
+                        commandBuffer,
+                        &dependencyToShader
+                    );
+                }
+            }
+        }
     }
 
-    vkCmdEndRendering(commandBuffer);
-
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) { return 1; }
-
-    return 0; 
+    return 0;
 }
 
 void VANILLA_VK_destroyCommandBuffers(void) {

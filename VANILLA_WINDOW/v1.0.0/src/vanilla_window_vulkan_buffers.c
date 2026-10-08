@@ -332,6 +332,13 @@ int VANILLA_InitializePersistentBuffers(VkDevice device, VkPhysicalDevice physic
 
     VANILLA_InitializeUploadBuffers(globalVertexBufferSize, globalIndexBufferSize, transformBufferSize, lookupBufferSize);
 
+    size_t vmlallocationSize = maxTotalEntities * sizeof(uint32_t);
+    vulkan.vramModelList = (uint32_t*)VANILLA_mmap(vmlallocationSize);
+    if (vulkan.vramModelList == NULL) { return 1; }
+
+    memset(vulkan.vramModelList, 0, vmlallocationSize);
+    vulkan.vramActiveCount = 0;
+
     return 0;
 }
 
@@ -524,7 +531,7 @@ void VANILLA_CleanupPersistentBuffers(VkDevice device) {
 }
 
 int VANILLA_VK_initIndirectBuffer(void) {
-    VkDeviceSize indirectBufferSize = (VkDeviceSize)stream->chunkLimit * CHUNKSIZE * sizeof(VkDrawIndexedIndirectCommand);
+    VkDeviceSize indirectBufferSize = (VkDeviceSize)stream->chunkLimit * CHUNKSIZE * vulkan.pipelineCount * sizeof(VkDrawIndexedIndirectCommand);
 
     VkBufferCreateInfo bufferInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -543,7 +550,7 @@ int VANILLA_VK_initIndirectBuffer(void) {
     uint32_t memTypeIdx = VANILLA_FindMemoryType(
         vulkan.physicalDevice,
         memReqs.memoryTypeBits, 
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT
     );
 
     VkMemoryAllocateInfo allocInfo = {
@@ -556,8 +563,13 @@ int VANILLA_VK_initIndirectBuffer(void) {
         vkDestroyBuffer(vulkan.device, vulkan.indirectCommandBuffer, NULL);
         return 1;
     }
-
     vkBindBufferMemory(vulkan.device, vulkan.indirectCommandBuffer, vulkan.indirectCommandBufferMemory, 0);
+
+    vulkan.entityPipelineIndices = VANILLA_mmap(stream->chunkLimit * CHUNKSIZE * sizeof(uint16_t));
+    if (vulkan.entityPipelineIndices == VANILLA_MAP_FAILED) {
+        vkDestroyBuffer(vulkan.device, vulkan.indirectCommandBuffer, NULL);
+        return 1;
+    }
 
     if (vkMapMemory(
             vulkan.device, 
@@ -569,11 +581,12 @@ int VANILLA_VK_initIndirectBuffer(void) {
     {
         vkFreeMemory(vulkan.device, vulkan.indirectCommandBufferMemory, NULL);
         vkDestroyBuffer(vulkan.device, vulkan.indirectCommandBuffer, NULL);
+        VANILLA_munmap(vulkan.entityPipelineIndices, stream->chunkLimit * CHUNKSIZE * sizeof(uint16_t));
         return 1;
     }
-
     memset(vulkan.mappedIndirectCommands, 0, indirectBufferSize);
 
+    memset(vulkan.entityPipelineIndices, 0, stream->chunkLimit * CHUNKSIZE * sizeof(uint16_t));
     return 0;
 }
 
@@ -581,16 +594,14 @@ void VANILLA_VK_cleanupIndirectBuffer(void) {
     if (vulkan.indirectCommandBufferMemory != VK_NULL_HANDLE) {
         vkUnmapMemory(vulkan.device, vulkan.indirectCommandBufferMemory);
     }
-
     if (vulkan.indirectCommandBuffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(vulkan.device, vulkan.indirectCommandBuffer, NULL);
         vulkan.indirectCommandBuffer = VK_NULL_HANDLE;
     }
-
     if (vulkan.indirectCommandBufferMemory != VK_NULL_HANDLE) {
         vkFreeMemory(vulkan.device, vulkan.indirectCommandBufferMemory, NULL);
         vulkan.indirectCommandBufferMemory = VK_NULL_HANDLE;
     }
-
+    
     vulkan.mappedIndirectCommands = NULL;
 }

@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-VkDescriptorSetLayout VANILLA_CreateDescriptorSetLayout(void) {
+int VANILLA_CreateDescriptorSetLayout(void) {
     VkDescriptorSetLayoutBinding bindings[7] = {0};
 
     bindings[0].binding = 0;
@@ -62,11 +62,8 @@ VkDescriptorSetLayout VANILLA_CreateDescriptorSetLayout(void) {
         0,
         0,
 
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
-
-        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-        VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT
     };
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = {
@@ -83,19 +80,43 @@ VkDescriptorSetLayout VANILLA_CreateDescriptorSetLayout(void) {
     layoutInfo.pNext = &bindingFlagsInfo;
 
     VkDescriptorSetLayout layout;
-
     if (vkCreateDescriptorSetLayout(
-            vulkan.device,
-            &layoutInfo,
-            NULL,
-            &layout) != VK_SUCCESS)
-    {
-        return VK_NULL_HANDLE;
-    }
+        vulkan.device,
+        &layoutInfo,
+        NULL,
+        &layout) != VK_SUCCESS) { return 1; }
 
     vulkan.descriptorSetLayout = layout;
+    return 0;
+}
 
-    return layout;
+int VANILLA_CreatePostProcessingDescriptorSetLayout(void) {
+    VkDescriptorSetLayoutBinding bindings[2] = {0};
+
+    bindings[0].binding = 0;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].descriptorCount = vulkan.pipelineCount;
+    bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    bindings[1].binding = 1;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[1].descriptorCount = 2;
+    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {0};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 2;
+    layoutInfo.pBindings = bindings;
+
+    VkDescriptorSetLayout layout;
+    if (vkCreateDescriptorSetLayout(
+        vulkan.device,
+        &layoutInfo,
+        NULL,
+        &layout) != VK_SUCCESS) { return 1; }
+
+    vulkan.postProcessingDescriptorSetLayout = layout;
+    return 0;
 }
 
 int VANILLA_CreateDescriptor(void) {
@@ -118,12 +139,10 @@ int VANILLA_CreateDescriptor(void) {
     poolInfo.maxSets = 1;
 
     if (vkCreateDescriptorPool(
-            vulkan.device,
-            &poolInfo,
-            NULL,
-            &vulkan.descriptorPool) != VK_SUCCESS) {
-        return 1;
-    }
+        vulkan.device,
+        &poolInfo,
+        NULL,
+        &vulkan.descriptorPool) != VK_SUCCESS) { return 1; }
 
     VkDescriptorSetAllocateInfo allocInfo = {0};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -132,11 +151,9 @@ int VANILLA_CreateDescriptor(void) {
     allocInfo.pSetLayouts = &vulkan.descriptorSetLayout;
 
     if (vkAllocateDescriptorSets(
-            vulkan.device,
-            &allocInfo,
-            &vulkan.descriptorSet) != VK_SUCCESS) {
-        return 1;
-    }
+        vulkan.device,
+        &allocInfo,
+        &vulkan.descriptorSet) != VK_SUCCESS) { return 1; }
 
     VkDescriptorBufferInfo transformInfo = {
         .buffer = vulkan.globalTransformBuffer,
@@ -175,11 +192,9 @@ int VANILLA_CreateDescriptor(void) {
         if (vulkan.textureInfos != VANILLA_MAP_FAILED) {
             VANILLA_munmap(vulkan.textureInfos, sizeof(VkDescriptorImageInfo) * textureLimit);
         }
-
         if (vulkan.samplerInfos != VANILLA_MAP_FAILED) {
             VANILLA_munmap(vulkan.samplerInfos, sizeof(VkDescriptorImageInfo) * samplerLimit);
         }
-
         return 1;
     }
 
@@ -268,6 +283,85 @@ int VANILLA_CreateDescriptor(void) {
     return 0;
 }
 
+int VANILLA_CreatePostProcessingDescriptor(void) {
+    if (vulkan.pipelineCount == 0) { return 0; }
+
+    VkDescriptorPoolSize poolSize = {0};
+    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSize.descriptorCount = vulkan.pipelineCount + 2;
+
+    VkDescriptorPoolCreateInfo poolInfo = {0};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.maxSets = 1;
+
+    if (vkCreateDescriptorPool(
+        vulkan.device,
+        &poolInfo,
+        NULL,
+        &vulkan.postProcessingDescriptorPool) != VK_SUCCESS) { return 1; }
+
+    VkDescriptorSetAllocateInfo allocInfo = {0};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = vulkan.postProcessingDescriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &vulkan.postProcessingDescriptorSetLayout;
+
+    if (vkAllocateDescriptorSets(
+        vulkan.device,
+        &allocInfo,
+        &vulkan.postProcessingDescriptorSet) != VK_SUCCESS) { return 1; }
+
+    VkDescriptorImageInfo* pipelineImageInfos = VANILLA_mmap(sizeof(VkDescriptorImageInfo) * vulkan.pipelineCount);
+    if (pipelineImageInfos == VANILLA_MAP_FAILED) { return 1; }
+
+    VkDescriptorImageInfo* postProcessingImageInfos = VANILLA_mmap(sizeof(VkDescriptorImageInfo) * 2);
+    if (postProcessingImageInfos == VANILLA_MAP_FAILED) {
+        VANILLA_munmap(pipelineImageInfos, sizeof(VkDescriptorImageInfo) * vulkan.pipelineCount);
+        return 1;
+    }
+
+    for (uint16_t i = 0; i < vulkan.pipelineCount; i++) {
+        pipelineImageInfos[i].sampler = vulkan.defaultSampler;
+        pipelineImageInfos[i].imageView = vulkan.pipelineImageViews[i];
+        pipelineImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    for (uint32_t i = 0; i < 2; i++) {
+        postProcessingImageInfos[i].sampler = vulkan.defaultSampler;
+        postProcessingImageInfos[i].imageView = vulkan.postProcessingImageViews[i];
+        postProcessingImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    VkWriteDescriptorSet writes[2] = {0};
+
+    writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[0].dstSet = vulkan.postProcessingDescriptorSet;
+    writes[0].dstBinding = 0;
+    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[0].descriptorCount = vulkan.pipelineCount;
+    writes[0].pImageInfo = pipelineImageInfos;
+
+    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[1].dstSet = vulkan.postProcessingDescriptorSet;
+    writes[1].dstBinding = 1;
+    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[1].descriptorCount = 2;
+    writes[1].pImageInfo = postProcessingImageInfos;
+
+    vkUpdateDescriptorSets(
+        vulkan.device,
+        2,
+        writes,
+        0,
+        NULL
+    );
+
+    VANILLA_munmap(pipelineImageInfos, sizeof(VkDescriptorImageInfo) * vulkan.pipelineCount);
+    VANILLA_munmap(postProcessingImageInfos, sizeof(VkDescriptorImageInfo) * 2);
+    return 0;
+}
+
 VkPipelineVertexInputStateCreateInfo VANILLA_makePipelineVertexInput(VkVertexInputBindingDescription* outBindingDesc, VkVertexInputAttributeDescription* outAttrDescs) {
     outBindingDesc->binding = 0;
     outBindingDesc->stride = stride;
@@ -281,19 +375,15 @@ VkPipelineVertexInputStateCreateInfo VANILLA_makePipelineVertexInput(VkVertexInp
             case VANILLA_VERTEXFORMAT_R32_FLOAT:
                 format = VK_FORMAT_R32_SFLOAT;
                 break;
-        
             case VANILLA_VERTEXFORMAT_R32G32_FLOAT:
                 format = VK_FORMAT_R32G32_SFLOAT;
                 break;
-        
             case VANILLA_VERTEXFORMAT_R32G32B32_FLOAT:
                 format = VK_FORMAT_R32G32B32_SFLOAT;
                 break;
-        
             case VANILLA_VERTEXFORMAT_R32G32B32A32_FLOAT:
                 format = VK_FORMAT_R32G32B32A32_SFLOAT;
                 break;
-        
             default:
                 printf("[VANILLA] invalid vertex format\n");
                 format = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -323,4 +413,25 @@ void VANILLA_CleanupDescriptorLayout(void) {
 
     if (vulkan.textureInfos != VANILLA_MAP_FAILED) { VANILLA_munmap(vulkan.textureInfos, sizeof(VkDescriptorImageInfo) * textureLimit); }
     if (vulkan.samplerInfos != VANILLA_MAP_FAILED) { VANILLA_munmap(vulkan.samplerInfos, sizeof(VkDescriptorImageInfo) * samplerLimit); }
+}
+
+void VANILLA_CleanupPostProcessingDescriptor(void) {
+    if (vulkan.postProcessingDescriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(
+            vulkan.device,
+            vulkan.postProcessingDescriptorPool,
+            NULL
+        );
+        vulkan.postProcessingDescriptorPool = VK_NULL_HANDLE;
+        vulkan.postProcessingDescriptorSet = VK_NULL_HANDLE;
+    }
+
+    if (vulkan.postProcessingDescriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(
+            vulkan.device,
+            vulkan.postProcessingDescriptorSetLayout,
+            NULL
+        );
+        vulkan.postProcessingDescriptorSetLayout = VK_NULL_HANDLE;
+    }
 }

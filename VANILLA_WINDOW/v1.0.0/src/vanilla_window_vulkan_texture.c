@@ -26,19 +26,12 @@ static int VANILLA_VK_createTextureUploadBuffer(void) {
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE
     };
 
-    if (vkCreateBuffer(vulkan.device, &bufferCreateInfo, NULL, &vulkan.textureUploadBuffer) != VK_SUCCESS) {
-        return 1;
-    }
+    if (vkCreateBuffer(vulkan.device, &bufferCreateInfo, NULL, &vulkan.textureUploadBuffer) != VK_SUCCESS) { return 1; }
 
     VkMemoryRequirements memoryRequirements;
     vkGetBufferMemoryRequirements(vulkan.device, vulkan.textureUploadBuffer, &memoryRequirements);
 
-    vulkan.textureUploadMemory = VANILLA_gmmap(
-        &memoryRequirements,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-    );
-
+    vulkan.textureUploadMemory = VANILLA_gmmap(&memoryRequirements, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     if (vulkan.textureUploadMemory == VK_NULL_HANDLE) {
         vkDestroyBuffer(vulkan.device, vulkan.textureUploadBuffer, NULL);
         vulkan.textureUploadBuffer = VK_NULL_HANDLE;
@@ -46,35 +39,32 @@ static int VANILLA_VK_createTextureUploadBuffer(void) {
     }
 
     if (vkBindBufferMemory(
-            vulkan.device,
-            vulkan.textureUploadBuffer,
-            vulkan.textureUploadMemory,
-            0) != VK_SUCCESS) {
+        vulkan.device,
+        vulkan.textureUploadBuffer,
+        vulkan.textureUploadMemory,
+        0) != VK_SUCCESS) {
 
         VANILLA_gmunmap(vulkan.textureUploadMemory);
-
         vkDestroyBuffer(vulkan.device, vulkan.textureUploadBuffer, NULL);
 
         vulkan.textureUploadMemory = VK_NULL_HANDLE;
         vulkan.textureUploadBuffer = VK_NULL_HANDLE;
-
         return 1;
     }
 
     if (vkMapMemory(
-            vulkan.device,
-            vulkan.textureUploadMemory,
-            0,
-            textureSizeLimit,
-            0,
-            &vulkan.mappedTextureUploadPtr) != VK_SUCCESS) {
+        vulkan.device,
+        vulkan.textureUploadMemory,
+        0,
+        textureSizeLimit,
+        0,
+        &vulkan.mappedTextureUploadPtr) != VK_SUCCESS) {
 
         VANILLA_gmunmap(vulkan.textureUploadMemory);
         vkDestroyBuffer(vulkan.device, vulkan.textureUploadBuffer, NULL);
 
         vulkan.textureUploadMemory = VK_NULL_HANDLE;
         vulkan.textureUploadBuffer = VK_NULL_HANDLE;
-
         return 1;
     }
 
@@ -86,12 +76,10 @@ static void VANILLA_VK_destroyTextureUploadBuffer(void) {
         vkUnmapMemory(vulkan.device, vulkan.textureUploadMemory);
         vulkan.mappedTextureUploadPtr = NULL;
     }
-
     if (vulkan.textureUploadMemory != VK_NULL_HANDLE) {
         VANILLA_gmunmap(vulkan.textureUploadMemory);
         vulkan.textureUploadMemory = VK_NULL_HANDLE;
     }
-
     if (vulkan.textureUploadBuffer != VK_NULL_HANDLE) {
         vkDestroyBuffer(vulkan.device, vulkan.textureUploadBuffer, NULL);
         vulkan.textureUploadBuffer = VK_NULL_HANDLE;
@@ -136,11 +124,9 @@ void VANILLA_VK_texturefree(void) {
         if (vulkan.textures[i].imageView) {
             vkDestroyImageView(vulkan.device, vulkan.textures[i].imageView, NULL);
         }
-
         if (vulkan.textures[i].image) {
             vkDestroyImage(vulkan.device, vulkan.textures[i].image, NULL);
         }
-
         if (vulkan.textures[i].memory) {
             vkFreeMemory(vulkan.device, vulkan.textures[i].memory, NULL);
         }
@@ -157,52 +143,36 @@ static VkFormat VANILLA_VK_getFormat(VANILLA_TextureFormat format) {
     switch (format) {
         case VANILLA_TEXTUREFORMAT_R8_UNORM:
             return VK_FORMAT_R8_UNORM;
-
         case VANILLA_TEXTUREFORMAT_RG8_UNORM:
             return VK_FORMAT_R8G8_UNORM;
-
         case VANILLA_TEXTUREFORMAT_RGB8_UNORM:
             return VK_FORMAT_R8G8B8_UNORM;
-
         case VANILLA_TEXTUREFORMAT_RGBA8_UNORM:
             return VK_FORMAT_R8G8B8A8_UNORM;
-
         case VANILLA_TEXTUREFORMAT_R8_SRGB:
             return VK_FORMAT_R8_SRGB;
-
         case VANILLA_TEXTUREFORMAT_RG8_SRGB:
             return VK_FORMAT_R8G8_SRGB;
-
         case VANILLA_TEXTUREFORMAT_RGB8_SRGB:
             return VK_FORMAT_R8G8B8_SRGB;
-
         case VANILLA_TEXTUREFORMAT_RGBA8_SRGB:
             return VK_FORMAT_R8G8B8A8_SRGB;
-
         case VANILLA_TEXTUREFORMAT_R16_FLOAT:
             return VK_FORMAT_R16_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_RG16_FLOAT:
             return VK_FORMAT_R16G16_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_RGBA16_FLOAT:
             return VK_FORMAT_R16G16B16A16_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_R32_FLOAT:
             return VK_FORMAT_R32_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_RG32_FLOAT:
             return VK_FORMAT_R32G32_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_RGBA32_FLOAT:
             return VK_FORMAT_R32G32B32A32_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_DEPTH32_FLOAT:
             return VK_FORMAT_D32_SFLOAT;
-
         case VANILLA_TEXTUREFORMAT_DEPTH24_STENCIL8:
             return VK_FORMAT_D24_UNORM_S8_UINT;
-
         default:
             return VK_FORMAT_UNDEFINED;
     }
@@ -211,45 +181,32 @@ static VkFormat VANILLA_VK_getFormat(VANILLA_TextureFormat format) {
 static VANILLA_RESULT VANILLA_VK_createImage(VANILLA_Texture* texture, const VANILLA_TextureCreateInfo* createInfo) {
     VkImageCreateInfo imageInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-
         .imageType = VK_IMAGE_TYPE_2D,
-
         .extent = {
             .width  = createInfo->width,
             .height = createInfo->height,
             .depth  = 1
         },
-
         .mipLevels = createInfo->mipLevels,
         .arrayLayers = 1,
-
         .format = VANILLA_VK_getFormat(createInfo->format),
-
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-
-        .usage =
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            VK_IMAGE_USAGE_SAMPLED_BIT,
-
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-
         .samples = VK_SAMPLE_COUNT_1_BIT,
-
         .flags = 0
     };
 
     if (vkCreateImage(
-            vulkan.device,
-            &imageInfo,
-            NULL,
-            &texture->image) != VK_SUCCESS) {
+        vulkan.device,
+        &imageInfo,
+        NULL,
+        &texture->image) != VK_SUCCESS) {
         return 1;
     }
 
     VkMemoryRequirements requirements;
-
     vkGetImageMemoryRequirements(
         vulkan.device,
         texture->image,
@@ -257,11 +214,7 @@ static VANILLA_RESULT VANILLA_VK_createImage(VANILLA_Texture* texture, const VAN
     );
 
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-    texture->memory = VANILLA_gmmap(
-        &requirements,
-        properties
-    );
+    texture->memory = VANILLA_gmmap(&requirements, properties);
 
     if (texture->memory == VK_NULL_HANDLE) {
         vkDestroyImage(vulkan.device, texture->image, NULL);
@@ -270,10 +223,10 @@ static VANILLA_RESULT VANILLA_VK_createImage(VANILLA_Texture* texture, const VAN
     }
 
     if (vkBindImageMemory(
-            vulkan.device,
-            texture->image,
-            texture->memory,
-            0) != VK_SUCCESS) {
+        vulkan.device,
+        texture->image,
+        texture->memory,
+        0) != VK_SUCCESS) {
 
         VANILLA_gmunmap(texture->memory);
         vkDestroyImage(vulkan.device, texture->image, NULL);
@@ -299,13 +252,9 @@ static VANILLA_RESULT VANILLA_VK_createImageView(VANILLA_Texture* texture) {
         case VANILLA_TEXTUREFORMAT_DEPTH32_FLOAT:
             aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             break;
-
         case VANILLA_TEXTUREFORMAT_DEPTH24_STENCIL8:
-            aspectMask =
-                VK_IMAGE_ASPECT_DEPTH_BIT |
-                VK_IMAGE_ASPECT_STENCIL_BIT;
+            aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
             break;
-
         default:
             aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             break;
@@ -313,11 +262,8 @@ static VANILLA_RESULT VANILLA_VK_createImageView(VANILLA_Texture* texture) {
 
     VkImageViewCreateInfo imageViewInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-
         .image = texture->image,
-
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-
         .format = VANILLA_VK_getFormat(texture->format),
 
         .components = {
@@ -339,21 +285,17 @@ static VANILLA_RESULT VANILLA_VK_createImageView(VANILLA_Texture* texture) {
     };
 
     if (vkCreateImageView(
-            vulkan.device,
-            &imageViewInfo,
-            NULL,
-            &texture->imageView) != VK_SUCCESS) {
-        return 1;
-    }
+        vulkan.device,
+        &imageViewInfo,
+        NULL,
+        &texture->imageView) != VK_SUCCESS) { return 1; }
 
     return VANILLA_SUCCESS;
 }
 
 static int VANILLA_VK_transitionImageLayout(VkImage image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
     VkCommandBuffer commandBuffer = VANILLA_VK_beginSingleTimeCommands();
-    if (commandBuffer == VK_NULL_HANDLE) {
-        return 1;
-    }
+    if (commandBuffer == VK_NULL_HANDLE) { return 1; }
 
     VkImageMemoryBarrier barrier = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -421,9 +363,7 @@ static int VANILLA_VK_transitionImageLayout(VkImage image, VkImageAspectFlags as
 
 static int VANILLA_VK_copyBufferToImage(VkImage image, uint32_t width, uint32_t height) {
     VkCommandBuffer commandBuffer = VANILLA_VK_beginSingleTimeCommands();
-    if (commandBuffer == VK_NULL_HANDLE) {
-        return 1;
-    }
+    if (commandBuffer == VK_NULL_HANDLE) { return 1; }
 
     VkBufferImageCopy region = {
         .bufferOffset = 0,
@@ -463,11 +403,7 @@ static int VANILLA_VK_copyBufferToImage(VkImage image, uint32_t width, uint32_t 
 }
 
 static int VANILLA_VK_uploadTexture(VANILLA_Texture* texture, const VANILLA_TextureCreateInfo* createInfo) {
-    memcpy(
-        vulkan.mappedTextureUploadPtr,
-        createInfo->data,
-        createInfo->dataSize
-    );
+    memcpy(vulkan.mappedTextureUploadPtr, createInfo->data, createInfo->dataSize);
 
     VANILLA_RESULT result;
 
@@ -478,20 +414,14 @@ static int VANILLA_VK_uploadTexture(VANILLA_Texture* texture, const VANILLA_Text
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         texture->mipLevels
     );
-
-    if (result != VANILLA_SUCCESS) {
-        return result;
-    }
+    if (result != VANILLA_SUCCESS) { return result; }
 
     result = VANILLA_VK_copyBufferToImage(
         texture->image,
         texture->width,
         texture->height
     );
-
-    if (result != VANILLA_SUCCESS) {
-        return result;
-    }
+    if (result != VANILLA_SUCCESS) { return result; }
 
     result = VANILLA_VK_transitionImageLayout(
         texture->image,
@@ -500,15 +430,12 @@ static int VANILLA_VK_uploadTexture(VANILLA_Texture* texture, const VANILLA_Text
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         texture->mipLevels
     );
-
-    if (result != VANILLA_SUCCESS) {
-        return result;
-    }
+    if (result != VANILLA_SUCCESS) { return result; }
 
     return 0;
 }
 
-int createDefaultTexture() {
+int createDefaultTexture(void) {
     uint32_t pixels[1] = {
         0xFFFFFFFF
     };
@@ -550,6 +477,7 @@ int createDefaultTexture() {
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_createTexture(const VANILLA_TextureCreateInfo* createInfo, TextureID* outTextureID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (vulkan.textureFreeSlotCount == 0) { return VANILLA_ERR_CAPACITY_REACHED; }
     if (createInfo->dataSize > textureSizeLimit) { return VANILLA_ERR_TEXTURE_SIZE_LIMIT; }
     if (createInfo->data == NULL) { return VANILLA_ERR_NULL_POINTER; }
@@ -598,6 +526,7 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_createTexture(const VANILLA_TextureCreateI
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_destroyTexture(TextureID textureID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (textureID.slot >= textureLimit) { return VANILLA_ERR_INVALID_TEXTURE; }
     if (vulkan.textureGenerations[textureID.slot] != textureID.generation) { return VANILLA_ERR_INVALID_TEXTURE; }
 

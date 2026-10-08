@@ -334,165 +334,311 @@ typedef enum {
     VANILLA_INPUTSTATE_RELEASED = 1 << 2
 } VANILLA_InputState;
 
+typedef enum {
+    VANILLA_PRIMITIVETOPOLOGY_POINT_LIST,
+    VANILLA_PRIMITIVETOPOLOGY_LINE_LIST,
+    VANILLA_PRIMITIVETOPOLOGY_LINE_STRIP,
+    VANILLA_PRIMITIVETOPOLOGY_TRIANGLE_LIST,
+    VANILLA_PRIMITIVETOPOLOGY_TRIANGLE_STRIP,
+    VANILLA_PRIMITIVETOPOLOGY_TRIANGLE_FAN
+} VANILLA_PrimitiveTopology;
+
+typedef enum {
+    VANILLA_POLYGONMODE_FILL,
+    VANILLA_POLYGONMODE_LINE,
+    VANILLA_POLYGONMODE_POINT
+} VANILLA_PolygonMode;
+
+typedef enum {
+    VANILLA_CULLMODE_NONE,
+    VANILLA_CULLMODE_FRONT,
+    VANILLA_CULLMODE_BACK,
+    VANILLA_CULLMODE_FRONT_AND_BACK
+} VANILLA_CullMode;
+
+typedef enum {
+    VANILLA_FRONTFACE_COUNTER_CLOCKWISE,
+    VANILLA_FRONTFACE_CLOCKWISE
+} VANILLA_FrontFace;
+
+typedef enum {
+    VANILLA_COMPARE_NEVER,
+    VANILLA_COMPARE_LESS,
+    VANILLA_COMPARE_EQUAL,
+    VANILLA_COMPARE_LESS_OR_EQUAL,
+    VANILLA_COMPARE_GREATER,
+    VANILLA_COMPARE_NOT_EQUAL,
+    VANILLA_COMPARE_GREATER_OR_EQUAL,
+    VANILLA_COMPARE_ALWAYS
+} VANILLA_CompareOp;
+
+typedef enum {
+    VANILLA_BLENDFACTOR_ZERO,
+    VANILLA_BLENDFACTOR_ONE,
+    VANILLA_BLENDFACTOR_SRC_COLOR,
+    VANILLA_BLENDFACTOR_ONE_MINUS_SRC_COLOR,
+    VANILLA_BLENDFACTOR_DST_COLOR,
+    VANILLA_BLENDFACTOR_ONE_MINUS_DST_COLOR,
+    VANILLA_BLENDFACTOR_SRC_ALPHA,
+    VANILLA_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+    VANILLA_BLENDFACTOR_DST_ALPHA,
+    VANILLA_BLENDFACTOR_ONE_MINUS_DST_ALPHA
+} VANILLA_BlendFactor;
+
+typedef enum {
+    VANILLA_BLENDOP_ADD,
+    VANILLA_BLENDOP_SUBTRACT,
+    VANILLA_BLENDOP_REVERSE_SUBTRACT,
+    VANILLA_BLENDOP_MIN,
+    VANILLA_BLENDOP_MAX
+} VANILLA_BlendOp;
+
+typedef enum {
+    VANILLA_STENCIL_KEEP,
+    VANILLA_STENCIL_ZERO,
+    VANILLA_STENCIL_REPLACE,
+    VANILLA_STENCIL_INCREMENT_AND_CLAMP,
+    VANILLA_STENCIL_DECREMENT_AND_CLAMP,
+    VANILLA_STENCIL_INVERT,
+    VANILLA_STENCIL_INCREMENT_AND_WRAP,
+    VANILLA_STENCIL_DECREMENT_AND_WRAP
+} VANILLA_StencilOp;
+
+typedef struct {
+    VANILLA_StencilOp failOp;
+    VANILLA_StencilOp passOp;
+    VANILLA_StencilOp depthFailOp;
+    VANILLA_CompareOp compareOp;
+    uint32_t compareMask;
+    uint32_t writeMask;
+    uint32_t reference;
+} VANILLA_StencilState;
+
+typedef enum {
+    VANILLA_SAMPLECOUNT_1 = 1,
+    VANILLA_SAMPLECOUNT_2 = 2,
+    VANILLA_SAMPLECOUNT_4 = 4,
+    VANILLA_SAMPLECOUNT_8 = 8,
+    VANILLA_SAMPLECOUNT_16 = 16,
+    VANILLA_SAMPLECOUNT_32 = 32,
+    VANILLA_SAMPLECOUNT_64 = 64
+} VANILLA_SampleCount;
+
+typedef struct {
+    const uint32_t* vertexShader;
+    size_t vertexShaderSize;
+
+    const uint32_t* fragmentShader;
+    size_t fragmentShaderSize;
+
+    VANILLA_PrimitiveTopology topology;
+
+    VANILLA_PolygonMode polygonMode;
+    VANILLA_CullMode cullMode;
+    VANILLA_FrontFace frontFace;
+
+    bool depthTestEnable;
+    bool depthWriteEnable;
+    VANILLA_CompareOp depthCompareOp;
+
+    bool stencilTestEnable;
+    VANILLA_StencilState stencilFront;
+    VANILLA_StencilState stencilBack;
+
+    bool blendEnable;
+    VANILLA_BlendFactor srcColorBlendFactor;
+    VANILLA_BlendFactor dstColorBlendFactor;
+    VANILLA_BlendOp colorBlendOp;
+    VANILLA_BlendFactor srcAlphaBlendFactor;
+    VANILLA_BlendFactor dstAlphaBlendFactor;
+    VANILLA_BlendOp alphaBlendOp;
+
+    uint8_t colorWriteMask;
+
+    VANILLA_SampleCount samples;
+    bool sampleShadingEnable;
+    float minSampleShading;
+} VANILLA_PipelineCreateInfo;
+
+///
+
+typedef struct {
+    const uint32_t* vertexShader;
+    size_t vertexShaderSize;
+
+    const uint32_t* fragmentShader;
+    size_t fragmentShaderSize;
+} VANILLA_PostProcessingCreateInfo;
+
 typedef struct {
     /* Sets the application name. */
-    VANILLA_RESULT (*setAppName)(const char* appName);
+    VANILLA_RESULT (*setAppName) (const char* appName);
 
     /* Sets the window title. */
-    VANILLA_RESULT (*setWindowTitle)(const char* title);
+    VANILLA_RESULT (*setWindowTitle) (const char* title);
 
     /* Sets the application version. */
-    VANILLA_RESULT (*setAppVersion)(uint32_t major, uint32_t minor, uint32_t patch);
+    VANILLA_RESULT (*setAppVersion) (uint32_t major, uint32_t minor, uint32_t patch);
 
     /* Sets the window size. */
-    void (*setWindowSize)(unsigned int width, unsigned int height);
+    void (*setWindowSize) (unsigned int width, unsigned int height);
 
     /* Sets the window position. */
-    void (*setWindowPosition)(unsigned int x, unsigned int y);
+    void (*setWindowPosition) (unsigned int x, unsigned int y);
 
     /* Sets the cursor position within the window. */
-    void (*setCursorPosition)(unsigned int x, unsigned int y);
+    void (*setCursorPosition) (unsigned int x, unsigned int y);
 
     /* Shows the window. */
-    void (*showWindow)(void);
+    void (*showWindow) (void);
 
     /* Hides the window. */
-    void (*hideWindow)(void);
+    void (*hideWindow) (void);
 
     /* Sets the maximum number of vertices. */
-    VANILLA_RESULT (*setVertexLimit)(uint64_t limit);
+    VANILLA_RESULT (*setVertexLimit) (uint64_t limit);
 
     /* Sets the maximum number of indices. */
-    VANILLA_RESULT (*setIndexLimit)(uint64_t limit);
+    VANILLA_RESULT (*setIndexLimit) (uint64_t limit);
 
     /* Sets the memory allocation mode used by VANILLA. */
-    VANILLA_RESULT (*setMemoryMode)(VANILLA_MemoryMode memoryMode);
+    VANILLA_RESULT (*setMemoryMode) (VANILLA_MemoryMode memoryMode);
 
     /* Sets the vertex buffer layout. */
-    VANILLA_RESULT (*setVertexLayout)(uint32_t stride, const VANILLA_VertexAttribute* attributes, uint32_t attributeCount);
+    VANILLA_RESULT (*setVertexLayout) (uint32_t stride, const VANILLA_VertexAttribute* attributes, uint32_t attributeCount);
 
     /* Sets the maximum number of materials. */
-    VANILLA_RESULT (*setMaterialLimit)(uint32_t limit);
+    VANILLA_RESULT (*setMaterialLimit) (uint32_t limit);
 
     /* Sets the maximum number of textures. */
-    VANILLA_RESULT (*setTextureLimit)(uint32_t limit);
+    VANILLA_RESULT (*setTextureLimit) (uint32_t limit);
 
     /* Sets the maximum size of a texture upload. */
-    VANILLA_RESULT (*setTextureSizeLimit)(uint32_t limit);
+    VANILLA_RESULT (*setTextureSizeLimit) (uint32_t limit);
 
     /* Sets the maximum number of samplers. */
-    VANILLA_RESULT (*setSamplerLimit)(uint32_t limit);
+    VANILLA_RESULT (*setSamplerLimit) (uint32_t limit);
 
     /* Enables vertical synchronization. */
-    void (*enableVSync)(void);
+    void (*enableVSync) (void);
 
     /* Disables vertical synchronization. */
-    void (*disableVSync)(void);
+    void (*disableVSync) (void);
+
+    /* Sets the sky color. */
+    void (*setSkyColor) (Vec3f color);
 
     /* Sets the camera position. */
-    void (*setCameraPosition)(Vec3f position);
+    void (*setCameraPosition) (Vec3f position);
 
     /* Sets the camera UI offset. */
-    void (*setCameraUIOffset)(float offsetx, float offsety);
+    void (*setCameraUIOffset) (float offsetx, float offsety);
 
     /* Sets the camera target. */
-    void (*setCameraTarget)(Vec3f target);
+    void (*setCameraTarget) (Vec3f target);
 
     /* Sets the camera up direction. */
-    void (*setCameraUp)(Vec3f up);
+    void (*setCameraUp) (Vec3f up);
 
     /* Sets the camera field of view in degrees. */
-    void (*setCameraFOV)(float degree);
+    void (*setCameraFOV) (float degree);
 
     /* Sets the camera near clipping plane. */
-    void (*setCameraNear)(float nearPlane);
+    void (*setCameraNear) (float nearPlane);
 
     /* Sets the camera far clipping plane. */
-    void (*setCameraFar)(float farPlane);
+    void (*setCameraFar) (float farPlane);
 
     /* Sets the camera projection type and orthographic size. */
-    void (*setCameraProjection)(VANILLA_ProjectionType projection, float orthographicSize);
+    void (*setCameraProjection) (VANILLA_ProjectionType projection, float orthographicSize);
 
     /* Notifies VANILLA that a new ANYCORE chunk was allocated. */
-    VANILLA_RESULT (*notifyNewChunkAlloc)(void);
+    VANILLA_RESULT (*notifyNewChunkAlloc) (void);
 
     /* Notifies VANILLA that the last ANYCORE chunk was freed. */
-    VANILLA_RESULT (*notifyLastChunkFree)(void);
+    VANILLA_RESULT (*notifyLastChunkFree) (void);
 
     /* Dispatches pending input events to their bound functions. */
-    void (*inputDispatch)(void);
+    void (*inputDispatch) (void);
 
     /* Binds a function to an input event. */
-    bool (*bindInputEvent)(VANILLA_InputEvent event, void (*function)(VANILLA_InputState), EventBindID* outBindID);
+    bool (*bindInputEvent) (VANILLA_InputEvent event, void (*function) (VANILLA_InputState), EventBindID* outBindID);
 
     /* Removes a previously created input event binding. */
-    void (*unbindInputEvent)(VANILLA_InputEvent event, EventBindID id);
+    void (*unbindInputEvent) (VANILLA_InputEvent event, EventBindID id);
 
     /* Creates a material and returns its identifier. */
-    VANILLA_RESULT (*createMaterial)(VANILLA_MaterialCreateInfo materialCreateInfo, MaterialID* outMaterialID);
+    VANILLA_RESULT (*createMaterial) (VANILLA_MaterialCreateInfo materialCreateInfo, MaterialID* outMaterialID);
 
     /* Destroys a material. */
-    VANILLA_RESULT (*destroyMaterial)(MaterialID materialID);
+    VANILLA_RESULT (*destroyMaterial) (MaterialID materialID);
 
     /* Assigns a material and its flags to an entity. */
-    VANILLA_RESULT (*setMaterialComponent)(EntityID entityID, MaterialID materialID, uint32_t entityFlags1, uint32_t entityFlags2, uint32_t entityFlags3);
+    VANILLA_RESULT (*setMaterialComponent) (EntityID entityID, MaterialID materialID, uint32_t entityFlags1, uint32_t entityFlags2, uint32_t entityFlags3);
 
     /* Removes the material component from an entity. */
-    VANILLA_RESULT (*removeMaterialComponent)(EntityID entityID);
+    VANILLA_RESULT (*removeMaterialComponent) (EntityID entityID);
 
     /* Retrieves the material assigned to an entity. */
-    VANILLA_RESULT (*getMaterialComponent)(EntityID entityID, MaterialID* outMaterialID);
+    VANILLA_RESULT (*getMaterialComponent) (EntityID entityID, MaterialID* outMaterialID);
 
     /* Checks whether an entity has a material component. */
-    bool (*hasMaterialComponent)(EntityID entityID);
+    bool (*hasMaterialComponent) (EntityID entityID);
 
     /* Creates a sampler and returns its identifier. */
-    VANILLA_RESULT (*createSampler)(const VANILLA_SamplerCreateInfo* createInfo, SamplerID* outSamplerID);
+    VANILLA_RESULT (*createSampler) (const VANILLA_SamplerCreateInfo* createInfo, SamplerID* outSamplerID);
 
     /* Destroys a sampler. */
-    VANILLA_RESULT (*destroySampler)(SamplerID samplerID);
+    VANILLA_RESULT (*destroySampler) (SamplerID samplerID);
 
     /* Creates a texture and returns its identifier. */
-    VANILLA_RESULT (*createTexture)(const VANILLA_TextureCreateInfo* createInfo, TextureID* outTextureID);
+    VANILLA_RESULT (*createTexture) (const VANILLA_TextureCreateInfo* createInfo, TextureID* outTextureID);
 
     /* Destroys a texture. */
-    VANILLA_RESULT (*destroyTexture)(TextureID textureID);
+    VANILLA_RESULT (*destroyTexture) (TextureID textureID);
 
     /* Returns the VANILLA version. */
-    uint32_t (*getVersion)(void);
+    uint32_t (*getVersion) (void);
 
     /* Returns the current window title. */
-    const char* (*getWindowTitle)(void);
+    const char* (*getWindowTitle) (void);
 
     /* Returns all characters received during the current frame. */
-    const uint16_t* (*getTextInput)(uint32_t* outCount);
+    const uint16_t* (*getTextInput) (uint32_t* outCount);
 
     /* Retrieves the current window size. */
-    void (*getWindowSize)(unsigned int* width, unsigned int* height);
+    void (*getWindowSize) (unsigned int* width, unsigned int* height);
 
     /* Retrieves the current window position. */
-    void (*getWindowPosition)(unsigned int* x, unsigned int* y);
+    void (*getWindowPosition) (unsigned int* x, unsigned int* y);
 
     /* Retrieves the current cursor position within the window. */
-    void (*getCursorPosition)(unsigned int* x, unsigned int* y);
+    void (*getCursorPosition) (unsigned int* x, unsigned int* y);
 
     /* Returns whether the window is currently visible. */
-    bool (*isWindowVisible)(void);
+    bool (*isWindowVisible) (void);
 
     /* Retrieves the primary monitor size. */
-    void (*getMonitorSize)(unsigned int* width, unsigned int* height);
+    void (*getMonitorSize) (unsigned int* width, unsigned int* height);
 
     /* Returns the current vertex limit. */
-    uint64_t (*getVertexLimit)(void);
+    uint64_t (*getVertexLimit) (void);
 
     /* Returns the current index limit. */
-    uint64_t (*getIndexLimit)(void);
+    uint64_t (*getIndexLimit) (void);
 
     /* Returns the current memory allocation mode. */
-    VANILLA_MemoryMode (*getMemoryMode)(void);
+    VANILLA_MemoryMode (*getMemoryMode) (void);
 
     /* Returns whether vertical synchronization is enabled. */
-    bool (*isVSyncEnabled)(void);
+    bool (*isVSyncEnabled) (void);
+
+    VANILLA_RESULT (*configurePipelines) (const VANILLA_PipelineCreateInfo* infos, uint16_t count);
+    void (*setPipelineIndex) (EntityID entityID, uint16_t pipelineidx, bool didcreate);
+
+    void (*enablePostProcessing) (void);
+    void (*disablePostProcessing) (void);
+    VANILLA_RESULT (*configurePostProcessing) (const VANILLA_PostProcessingCreateInfo* infos, uint16_t count);
 } VANILLA_WINDOW_Wrapper;
 
 static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* libHandle) {
@@ -523,6 +669,8 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
 
     VANILLA_DLSYM(libHandle, "VANILLA_enableVSync", w->enableVSync);
     VANILLA_DLSYM(libHandle, "VANILLA_disableVSync", w->disableVSync);
+
+    VANILLA_DLSYM(libHandle, "VANILLA_setSkyColor", w->setSkyColor);
 
     VANILLA_DLSYM(libHandle, "VANILLA_setCameraPosition", w->setCameraPosition);
     VANILLA_DLSYM(libHandle, "VANILLA_setCameraUIOffset", w->setCameraUIOffset);
@@ -573,11 +721,18 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
     VANILLA_DLSYM(libHandle, "VANILLA_getMemoryMode", w->getMemoryMode);
     VANILLA_DLSYM(libHandle, "VANILLA_isVSyncEnabled", w->isVSyncEnabled);
 
+    VANILLA_DLSYM(libHandle, "VANILLA_configurePipelines", w->configurePipelines);
+    VANILLA_DLSYM(libHandle, "VANILLA_setPipelineIndex", w->setPipelineIndex);
+
+    VANILLA_DLSYM(libHandle, "VANILLA_enablePostProcessing", w->enablePostProcessing);
+    VANILLA_DLSYM(libHandle, "VANILLA_disablePostProcessing", w->disablePostProcessing);
+    VANILLA_DLSYM(libHandle, "VANILLA_configurePostProcessing", w->configurePostProcessing);
+
     return true;
 }
 
 static inline void VANILLA_WINDOW_injectWrapper(VANILLA_WINDOW_Wrapper* w, void* behaviourHandle) {
-    void (*injectWrapper)(void*) = NULL;
+    void (*injectWrapper) (void*) = NULL;
     VANILLA_DLSYM(behaviourHandle, "injectVANILLAWINDOWWrapper", injectWrapper);
     if (injectWrapper) { injectWrapper(w); }
 }

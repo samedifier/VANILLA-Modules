@@ -29,6 +29,7 @@ typedef struct {
     float uioffsety;
 } VANILLA_Camera;
 
+extern Vec3f skyColor;
 extern VANILLA_Camera camera;
 
 #endif // VANILLA_WINDOW_CAMERA

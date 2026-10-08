@@ -16,6 +16,9 @@
 #ifndef VANILLA_ANALYZER_H
 #define VANILLA_ANALYZER_H
 
+#include "vanilla_window_vulkan.h"
+#include "main.h"
+
 void VANILLA_analyzeStream();
 
 #endif // VANILLA_ANALYZER_H

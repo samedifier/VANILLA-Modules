@@ -22,16 +22,14 @@ int VANILLA_VK_createCommandPool(void) {
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
     };
 
-    VkResult result =
-        vkCreateCommandPool(
-            vulkan.device,
-            &createInfo,
-            NULL,
-            &vulkan.commandPool
-        );
+    VkResult result = vkCreateCommandPool(
+        vulkan.device,
+        &createInfo,
+        NULL,
+        &vulkan.commandPool
+    );
+    if (result != VK_SUCCESS) { return 1; }
 
-    if(result != VK_SUCCESS) { return 1; }
-    
     return 0;
 }
 
@@ -41,6 +39,5 @@ void VANILLA_VK_destroyCommandPool(void) {
         vulkan.commandPool,
         NULL
     );
-
     vulkan.commandPool = VK_NULL_HANDLE;
 }

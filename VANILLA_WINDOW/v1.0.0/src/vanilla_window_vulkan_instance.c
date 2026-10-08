@@ -103,7 +103,6 @@ int VANILLA_VK_createInstance(void) {
     return 0;
 }
 
-
 void VANILLA_VK_destroyInstance(void) {
     if (vulkan.instance) {
         vkDestroyInstance(vulkan.instance, NULL);

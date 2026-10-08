@@ -30,6 +30,7 @@ typedef enum {
     VANILLA_ERR_NULL_POINTER,
     VANILLA_ERR_ALLOC_FAILED,
     VANILLA_ERR_ALREADY_STARTED,
+    VANILLA_ERR_DIDNT_START,
     VANILLA_ERR_CAPACITY_REACHED,
 
     VANILLA_ERR_TEXTURE_SIZE_LIMIT,
@@ -253,6 +254,144 @@ typedef enum {
     VANILLA_CURSORMODE_DISABLED
 } VANILLA_CursorMode;
 
+///
+
+typedef enum {
+    VANILLA_PRIMITIVE_TOPOLOGY_POINT_LIST,
+    VANILLA_PRIMITIVE_TOPOLOGY_LINE_LIST,
+    VANILLA_PRIMITIVE_TOPOLOGY_LINE_STRIP,
+    VANILLA_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    VANILLA_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+    VANILLA_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN
+} VANILLA_PrimitiveTopology;
+
+typedef enum {
+    VANILLA_POLYGON_MODE_FILL,
+    VANILLA_POLYGON_MODE_LINE,
+    VANILLA_POLYGON_MODE_POINT
+} VANILLA_PolygonMode;
+
+typedef enum {
+    VANILLA_CULL_MODE_NONE,
+    VANILLA_CULL_MODE_FRONT,
+    VANILLA_CULL_MODE_BACK,
+    VANILLA_CULL_MODE_FRONT_AND_BACK
+} VANILLA_CullMode;
+
+typedef enum {
+    VANILLA_FRONT_FACE_COUNTER_CLOCKWISE,
+    VANILLA_FRONT_FACE_CLOCKWISE
+} VANILLA_FrontFace;
+
+typedef enum {
+    VANILLA_COMPARE_NEVER,
+    VANILLA_COMPARE_LESS,
+    VANILLA_COMPARE_EQUAL,
+    VANILLA_COMPARE_LESS_OR_EQUAL,
+    VANILLA_COMPARE_GREATER,
+    VANILLA_COMPARE_NOT_EQUAL,
+    VANILLA_COMPARE_GREATER_OR_EQUAL,
+    VANILLA_COMPARE_ALWAYS
+} VANILLA_CompareOp;
+
+typedef enum {
+    VANILLA_BLEND_FACTOR_ZERO,
+    VANILLA_BLEND_FACTOR_ONE,
+    VANILLA_BLEND_FACTOR_SRC_COLOR,
+    VANILLA_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+    VANILLA_BLEND_FACTOR_DST_COLOR,
+    VANILLA_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+    VANILLA_BLEND_FACTOR_SRC_ALPHA,
+    VANILLA_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    VANILLA_BLEND_FACTOR_DST_ALPHA,
+    VANILLA_BLEND_FACTOR_ONE_MINUS_DST_ALPHA
+} VANILLA_BlendFactor;
+
+typedef enum {
+    VANILLA_BLEND_OP_ADD,
+    VANILLA_BLEND_OP_SUBTRACT,
+    VANILLA_BLEND_OP_REVERSE_SUBTRACT,
+    VANILLA_BLEND_OP_MIN,
+    VANILLA_BLEND_OP_MAX
+} VANILLA_BlendOp;
+
+typedef enum {
+    VANILLA_STENCIL_KEEP,
+    VANILLA_STENCIL_ZERO,
+    VANILLA_STENCIL_REPLACE,
+    VANILLA_STENCIL_INCREMENT_AND_CLAMP,
+    VANILLA_STENCIL_DECREMENT_AND_CLAMP,
+    VANILLA_STENCIL_INVERT,
+    VANILLA_STENCIL_INCREMENT_AND_WRAP,
+    VANILLA_STENCIL_DECREMENT_AND_WRAP
+} VANILLA_StencilOp;
+
+typedef struct {
+    VANILLA_StencilOp failOp;
+    VANILLA_StencilOp passOp;
+    VANILLA_StencilOp depthFailOp;
+    VANILLA_CompareOp compareOp;
+    uint32_t compareMask;
+    uint32_t writeMask;
+    uint32_t reference;
+} VANILLA_StencilState;
+
+typedef enum {
+    VANILLA_SAMPLE_COUNT_1 = 1,
+    VANILLA_SAMPLE_COUNT_2 = 2,
+    VANILLA_SAMPLE_COUNT_4 = 4,
+    VANILLA_SAMPLE_COUNT_8 = 8,
+    VANILLA_SAMPLE_COUNT_16 = 16,
+    VANILLA_SAMPLE_COUNT_32 = 32,
+    VANILLA_SAMPLE_COUNT_64 = 64
+} VANILLA_SampleCount;
+
+typedef struct {
+    const uint32_t* vertexShader;
+    size_t vertexShaderSize;
+
+    const uint32_t* fragmentShader;
+    size_t fragmentShaderSize;
+
+    VANILLA_PrimitiveTopology topology;
+
+    VANILLA_PolygonMode polygonMode;
+    VANILLA_CullMode cullMode;
+    VANILLA_FrontFace frontFace;
+
+    bool depthTestEnable;
+    bool depthWriteEnable;
+    VANILLA_CompareOp depthCompareOp;
+
+    bool stencilTestEnable;
+    VANILLA_StencilState stencilFront;
+    VANILLA_StencilState stencilBack;
+
+    bool blendEnable;
+    VANILLA_BlendFactor srcColorBlendFactor;
+    VANILLA_BlendFactor dstColorBlendFactor;
+    VANILLA_BlendOp colorBlendOp;
+    VANILLA_BlendFactor srcAlphaBlendFactor;
+    VANILLA_BlendFactor dstAlphaBlendFactor;
+    VANILLA_BlendOp alphaBlendOp;
+
+    uint8_t colorWriteMask;
+
+    VANILLA_SampleCount samples;
+    bool sampleShadingEnable;
+    float minSampleShading;
+} VANILLA_PipelineCreateInfo;
+
+///
+
+typedef struct {
+    const uint32_t* vertexShader;
+    size_t vertexShaderSize;
+
+    const uint32_t* fragmentShader;
+    size_t fragmentShaderSize;
+} VANILLA_PostProcessingCreateInfo;
+
 extern uint32_t ANYCOREBuildID;
 extern ANYCORE_Stream* stream;
 extern bool didstart;
@@ -286,10 +425,10 @@ extern bool didShowWindowSet;
 extern bool enableVSync;
 extern bool didVSyncSet;
 
-extern uint32_t vertexShaderCode[];
-extern size_t   vertexShaderSize;
-extern uint32_t fragmentShaderCode[];
-extern size_t   fragmentShaderSize;
+extern VANILLA_PipelineCreateInfo* pipelineInfos;
+
+extern VANILLA_PostProcessingCreateInfo* postProcessingInfos;
+extern bool enablePostProcessing;
 
 extern uint32_t stride;
 extern uint64_t vertexLimit;

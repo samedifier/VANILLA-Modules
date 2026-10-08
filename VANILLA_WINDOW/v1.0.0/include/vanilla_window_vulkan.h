@@ -54,7 +54,24 @@ typedef struct {
     VkImageView    depthImageView;
 
     VkPipelineLayout pipelineLayout;
-    VkPipeline pipeline;
+    VkPipeline* pipelines;
+    uint16_t pipelineCount;
+
+    VkImage*        pipelineImages;
+    VkDeviceMemory* pipelineImageMemories;
+    VkImageView*    pipelineImageViews;
+
+    VkPipelineLayout postProcessingPipelineLayout;
+    VkPipeline* postProcessingPipelines;
+    uint16_t postProcessingCount;
+
+    VkDescriptorSetLayout postProcessingDescriptorSetLayout;
+    VkDescriptorPool postProcessingDescriptorPool;
+    VkDescriptorSet postProcessingDescriptorSet;
+
+    VkImage*        postProcessingImages;
+    VkDeviceMemory* postProcessingImageMemories;
+    VkImageView*    postProcessingImageViews;
     
     VkCommandPool commandPool;
     VkCommandBuffer* commandBuffers;
@@ -130,6 +147,8 @@ typedef struct {
     VkBuffer indirectCommandBuffer;
     VkDeviceMemory indirectCommandBufferMemory;
     VkDrawIndirectCommand* mappedIndirectCommands;
+
+    uint16_t* entityPipelineIndices;
 
     ///
 

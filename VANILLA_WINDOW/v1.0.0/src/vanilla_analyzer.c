@@ -33,6 +33,8 @@ void VANILLA_analyzeStream(void) {
         return; 
     }
 
+    const uint32_t entityCapacity = stream->chunkLimit * CHUNKSIZE;
+
     uint32_t maxModelIndex = 0;
     if (stream->chunkModelDirtyCount > 0) {
         for (uint32_t i = 0; i < stream->chunkModelDirtyCount; i++) {
@@ -108,9 +110,6 @@ void VANILLA_analyzeStream(void) {
             const ANYCORE_InstanceChunk* ic = &stream->instanceChunks[dirtyChunkIdx]; 
 
             uint32_t localDirtyCount = dc->dirtyCount;
-
-            StandardComponent_Chunk* scc = &materialComponent.chunks[dirtyChunkIdx];
-
             for (uint32_t d = 0; d < localDirtyCount; d++) {
                 uint32_t slotIdx = (uint32_t)dc->dirtyList[d];
                 
@@ -214,15 +213,28 @@ void VANILLA_analyzeStream(void) {
                     renderMatrix.m[13] = py;
                     renderMatrix.m[14] = pz;
 
-                    gpuIndirectCommands[absoluteIdx].indexCount    = lookupTable[modelIndex].indexCount;
-                    gpuIndirectCommands[absoluteIdx].instanceCount = ((gpuMaterial->flags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) != 0u) ? 0 : 1;
-                    gpuIndirectCommands[absoluteIdx].firstIndex    = lookupTable[modelIndex].firstIndex;
-                    gpuIndirectCommands[absoluteIdx].vertexOffset  = (int32_t)lookupTable[modelIndex].firstVertex;
-                    gpuIndirectCommands[absoluteIdx].firstInstance = absoluteIdx;
+                    const uint16_t pipelineIndex = vulkan.entityPipelineIndices[absoluteIdx];
+                    const uint32_t renderEnabled = ((gpuMaterial->flags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) == 0u);
+
+                    uint32_t indrctidx = 0;
+                    for (uint16_t currentPipeline = 0; currentPipeline < vulkan.pipelineCount; currentPipeline++) {
+                        indrctidx = ((uint32_t)currentPipeline * entityCapacity) + absoluteIdx;
+
+                        gpuIndirectCommands[indrctidx].instanceCount = (currentPipeline == pipelineIndex && renderEnabled) ? 1 : 0;
+                        gpuIndirectCommands[indrctidx].indexCount    = lookupTable[modelIndex].indexCount;
+                        gpuIndirectCommands[indrctidx].firstIndex    = lookupTable[modelIndex].firstIndex;
+                        gpuIndirectCommands[indrctidx].vertexOffset  = (int32_t)lookupTable[modelIndex].firstVertex;
+                        gpuIndirectCommands[indrctidx].firstInstance = absoluteIdx;
+                    }
 
                     memcpy(&gpuTransformTable[absoluteIdx], &renderMatrix, sizeof(mat4));
                 } else {
-                    gpuIndirectCommands[absoluteIdx].instanceCount = 0;
+                    uint32_t indrctidx = 0;
+                    for (uint16_t currentPipeline = 0; currentPipeline < vulkan.pipelineCount; currentPipeline++) {
+                        indrctidx = ((uint32_t)currentPipeline * entityCapacity) + absoluteIdx;
+                        gpuIndirectCommands[indrctidx].instanceCount = 0;
+                    }
+
                 }
 
                 if (vulkan.mappedUploadTransformBufferPtr != NULL) {

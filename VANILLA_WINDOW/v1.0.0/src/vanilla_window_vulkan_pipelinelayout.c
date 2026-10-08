@@ -30,6 +30,27 @@ int VANILLA_VK_createPipelineLayout(void) {
     return 0;
 }
 
+int VANILLA_VK_createPostProcessingPipelineLayout(void) {
+    VkPushConstantRange pushConstantRange = {
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset     = 0,
+        .size       = sizeof(uint32_t)
+    };
+
+    VkPipelineLayoutCreateInfo createInfo = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount         = 1,
+        .pSetLayouts            = &vulkan.postProcessingDescriptorSetLayout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &pushConstantRange
+    };
+
+    if (vkCreatePipelineLayout(vulkan.device, &createInfo, NULL, &vulkan.postProcessingPipelineLayout) != VK_SUCCESS) {
+        return 1; 
+    }
+    return 0;
+}
+
 void VANILLA_VK_destroyPipelineLayout(void) {
     vkDestroyPipelineLayout(
         vulkan.device,
@@ -37,4 +58,13 @@ void VANILLA_VK_destroyPipelineLayout(void) {
         NULL
     );
     vulkan.pipelineLayout = VK_NULL_HANDLE;
+}
+
+void VANILLA_VK_destroyPostProcessingPipelineLayout(void) {
+    vkDestroyPipelineLayout(
+        vulkan.device,
+        vulkan.postProcessingPipelineLayout,
+        NULL
+    );
+    vulkan.postProcessingPipelineLayout = VK_NULL_HANDLE;
 }

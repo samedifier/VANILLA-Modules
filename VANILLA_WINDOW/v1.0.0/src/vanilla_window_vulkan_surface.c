@@ -18,12 +18,11 @@
 
 int VANILLA_VK_createSurface(void) {
     if (glfwCreateWindowSurface(
-            vulkan.instance,
-            g_glfw.window,
-            NULL,
-            &vulkan.surface
-        ) != VK_SUCCESS) { return 1; }
-
+        vulkan.instance,
+        g_glfw.window,
+        NULL,
+        &vulkan.surface
+    ) != VK_SUCCESS) { return 1; }
     return 0;
 }
 

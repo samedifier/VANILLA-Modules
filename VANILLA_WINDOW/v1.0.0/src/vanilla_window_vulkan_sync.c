@@ -20,7 +20,6 @@ int VANILLA_VK_createSyncObjects(void) {
     VkSemaphoreCreateInfo semaphoreInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
     };
-
     VkFenceCreateInfo fenceInfo = {
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
         .flags = VK_FENCE_CREATE_SIGNALED_BIT
@@ -28,55 +27,46 @@ int VANILLA_VK_createSyncObjects(void) {
 
     VkResult result;
 
-    result =
-        vkCreateSemaphore(
-            vulkan.device,
-            &semaphoreInfo,
-            NULL,
-            &vulkan.imageAvailableSemaphore
-        );
+    result = vkCreateSemaphore(
+        vulkan.device,
+        &semaphoreInfo,
+        NULL,
+        &vulkan.imageAvailableSemaphore
+    );
+    if (result != VK_SUCCESS) { return 1; }
 
-    if(result != VK_SUCCESS) { return 1; }
-
-    result =
-        vkCreateSemaphore(
-            vulkan.device,
-            &semaphoreInfo,
-            NULL,
-            &vulkan.renderFinishedSemaphore
-        );
-
-    if(result != VK_SUCCESS) {
+    result = vkCreateSemaphore(
+        vulkan.device,
+        &semaphoreInfo,
+        NULL,
+        &vulkan.renderFinishedSemaphore
+    );
+    if (result != VK_SUCCESS) {
         vkDestroySemaphore(
             vulkan.device,
             vulkan.imageAvailableSemaphore,
             NULL
         );
-
         return 1;
     }
 
-    result =
-        vkCreateFence(
-            vulkan.device,
-            &fenceInfo,
-            NULL,
-            &vulkan.inFlightFence
-        );
-
-    if(result != VK_SUCCESS) {
+    result = vkCreateFence(
+        vulkan.device,
+        &fenceInfo,
+        NULL,
+        &vulkan.inFlightFence
+    );
+    if (result != VK_SUCCESS) {
         vkDestroySemaphore(
             vulkan.device,
             vulkan.renderFinishedSemaphore,
             NULL
         );
-
         vkDestroySemaphore(
             vulkan.device,
             vulkan.imageAvailableSemaphore,
             NULL
         );
-
         return 1;
     }
 
@@ -89,13 +79,11 @@ void VANILLA_VK_destroySyncObjects(void) {
         vulkan.inFlightFence,
         NULL
     );
-
     vkDestroySemaphore(
         vulkan.device,
         vulkan.renderFinishedSemaphore,
         NULL
     );
-
     vkDestroySemaphore(
         vulkan.device,
         vulkan.imageAvailableSemaphore,

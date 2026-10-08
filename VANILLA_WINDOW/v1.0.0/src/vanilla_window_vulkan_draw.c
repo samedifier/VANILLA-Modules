@@ -19,33 +19,28 @@
 int VANILLA_VK_drawFrame(void) {
     VkResult result;
 
-    result =
-        vkWaitForFences(
-            vulkan.device,
-            1,
-            &vulkan.inFlightFence,
-            VK_TRUE,
-            UINT64_MAX
-        );
-
-    if(result != VK_SUCCESS) { return 1; }
+    result = vkWaitForFences(
+        vulkan.device,
+        1,
+        &vulkan.inFlightFence,
+        VK_TRUE,
+        UINT64_MAX
+    );
+    if (result != VK_SUCCESS) { return 1; }
 
     uint32_t imageIndex;
-
-    result =
-        vkAcquireNextImageKHR(
-            vulkan.device,
-            vulkan.swapchain,
-            UINT64_MAX,
-            vulkan.imageAvailableSemaphore,
-            VK_NULL_HANDLE,
-            &imageIndex
-        );
-
-    if(result != VK_SUCCESS) { return 1; }
+    result = vkAcquireNextImageKHR(
+        vulkan.device,
+        vulkan.swapchain,
+        UINT64_MAX,
+        vulkan.imageAvailableSemaphore,
+        VK_NULL_HANDLE,
+        &imageIndex
+    );
+    if (result != VK_SUCCESS) { return 1; }
 
     result = vkResetFences(vulkan.device, 1, &vulkan.inFlightFence);
-    if(result != VK_SUCCESS) { return 1; }
+    if (result != VK_SUCCESS) { return 1; }
 
     if(VANILLA_VK_recordCommandBuffer(imageIndex, vulkan.vramActiveCount)) { return 1; }
 
@@ -64,15 +59,13 @@ int VANILLA_VK_drawFrame(void) {
         .pSignalSemaphores = &vulkan.renderFinishedSemaphore
     };
 
-    result =
-        vkQueueSubmit(
-            vulkan.graphicsQueue,
-            1,
-            &submitInfo,
-            vulkan.inFlightFence
-        );
-
-    if(result != VK_SUCCESS) { return 1; }
+    result = vkQueueSubmit(
+        vulkan.graphicsQueue,
+        1,
+        &submitInfo,
+        vulkan.inFlightFence
+    );
+    if (result != VK_SUCCESS) { return 1; }
 
     VkPresentInfoKHR presentInfo = {
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -84,8 +77,7 @@ int VANILLA_VK_drawFrame(void) {
     };
 
     result = vkQueuePresentKHR(vulkan.presentQueue, &presentInfo);
-
-    if(result != VK_SUCCESS) { return 1; }
+    if (result != VK_SUCCESS) { return 1; }
 
     return VANILLA_SUCCESS;
 }

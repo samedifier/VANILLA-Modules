@@ -290,6 +290,7 @@ void VANILLA_VK_destroyMaterialBuffer(void) {
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_createMaterial(const VANILLA_MaterialCreateInfo materialCreateInfo, MaterialID* outMaterialID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (!outMaterialID) { return VANILLA_ERR_NULL_POINTER; }
     if (vulkan.materialFreeSlotCount == 0) { return VANILLA_ERR_CAPACITY_REACHED; }
 
@@ -322,6 +323,7 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_createMaterial(const VANILLA_MaterialCreat
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_destroyMaterial(MaterialID materialID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (materialID.slot >= materialLimit) { return VANILLA_ERR_INVALID_MATERIAL; }
     
     if (vulkan.materialGenerations[materialID.slot] != materialID.generation) { return VANILLA_ERR_INVALID_MATERIAL; }
@@ -334,6 +336,7 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_destroyMaterial(MaterialID materialID) {
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_setMaterialComponent(EntityID entityID, MaterialID materialID, uint32_t entityFlags1, uint32_t entityFlags2, uint32_t entityFlags3) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (materialID.slot >= materialLimit) { return VANILLA_ERR_INVALID_MATERIAL; }
     if (vulkan.materialGenerations[materialID.slot] != materialID.generation) { return VANILLA_ERR_INVALID_MATERIAL; }
 
@@ -353,12 +356,21 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_setMaterialComponent(EntityID entityID, Ma
     gpuMaterial->flags3 = entityFlags3;
 
     VkDrawIndexedIndirectCommand* gpuIndirectCommands = (VkDrawIndexedIndirectCommand*)vulkan.mappedIndirectCommands;
-    gpuIndirectCommands[entityID.slot].instanceCount = ((entityFlags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) != 0u) ? 0 : 1;
+
+    const uint32_t entityCapacity = stream->chunkLimit * CHUNKSIZE;
+    const bool renderEnabled = (entityFlags1 & VANILLA_ENTITYFLAGS1_NO_RENDER) == 0u;
+
+    const uint16_t pipelineIndex = vulkan.entityPipelineIndices[entityID.slot];
+    for (uint16_t currentPipeline = 0; currentPipeline < vulkan.pipelineCount; currentPipeline++) {
+        const uint32_t indirectIndex = ((uint32_t)currentPipeline * entityCapacity) + entityID.slot;
+        gpuIndirectCommands[indirectIndex].instanceCount = (renderEnabled && currentPipeline == pipelineIndex) ? 1 : 0;
+    }
     
     return VANILLA_SUCCESS;
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_removeMaterialComponent(EntityID entityID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (!StandardComponent_has(&materialComponent, entityID)) { return VANILLA_ERR_HAS_NO_MATERIAL; }
     if (StandardComponent_remove(&materialComponent, entityID) != STANDARDCOMPONENT_SUCCESS) {
         return VANILLA_ERR_REMOVE_MATERIAL_COMPONENT;
@@ -373,6 +385,7 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_removeMaterialComponent(EntityID entityID)
 }
 
 VANILLA_EXPORT VANILLA_RESULT VANILLA_getMaterialComponent(EntityID entityID, MaterialID* outMaterialID) {
+    if (didstart == false) { return VANILLA_ERR_DIDNT_START; }
     if (outMaterialID == NULL) { return VANILLA_ERR_NULL_POINTER; }
     if (!StandardComponent_has(&materialComponent, entityID)) { return VANILLA_ERR_HAS_NO_MATERIAL; }
 
@@ -387,5 +400,6 @@ VANILLA_EXPORT VANILLA_RESULT VANILLA_getMaterialComponent(EntityID entityID, Ma
 }
 
 VANILLA_EXPORT bool VANILLA_hasMaterialComponent(EntityID entityID) {
+    if (didstart == false) { return false; }
     return StandardComponent_has(&materialComponent, entityID);
 }
