@@ -449,4 +449,7 @@ extern StandardComponent materialComponent;
 
 extern uint32_t eventFunctionLimit;
 
+extern double scrollOffsetX;
+extern double scrollOffsetY;
+
 #endif // MAIN_H

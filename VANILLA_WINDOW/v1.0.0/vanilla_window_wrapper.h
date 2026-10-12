@@ -566,6 +566,9 @@ typedef struct {
     /* Removes a previously created input event binding. */
     void (*unbindInputEvent) (VANILLA_InputEvent event, EventBindID id);
 
+    /* Retrieves the mouse scroll offsets and resets them after reading. */
+    void (*getScrollOffset) (double* xOffset, double* yOffset);
+
     /* Creates a material and returns its identifier. */
     VANILLA_RESULT (*createMaterial) (VANILLA_MaterialCreateInfo materialCreateInfo, MaterialID* outMaterialID);
 
@@ -688,6 +691,8 @@ static inline bool VANILLA_WINDOW_Wrapper_init(VANILLA_WINDOW_Wrapper* w, void* 
     VANILLA_DLSYM(libHandle, "VANILLA_inputDispatch", w->inputDispatch);
     VANILLA_DLSYM(libHandle, "VANILLA_bindInputEvent", w->bindInputEvent);
     VANILLA_DLSYM(libHandle, "VANILLA_unbindInputEvent", w->unbindInputEvent);
+
+    VANILLA_DLSYM(libHandle, "VANILLA_getScrollOffset", w->getScrollOffset);
 
     VANILLA_DLSYM(libHandle, "VANILLA_createMaterial", w->createMaterial);
     VANILLA_DLSYM(libHandle, "VANILLA_destroyMaterial", w->destroyMaterial);

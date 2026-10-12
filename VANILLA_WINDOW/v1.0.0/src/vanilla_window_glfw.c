@@ -20,6 +20,9 @@
 
 VANILLA_GLFW_State g_glfw;
 
+double scrollOffsetX = 0.0;
+double scrollOffsetY = 0.0;
+
 static uint16_t g_textInputBuffer[4096];
 static uint32_t g_textInputCount = 0;
 
@@ -38,6 +41,11 @@ static void VANILLA_GLFW_charCallback(GLFWwindow* window, unsigned int codepoint
         g_textInputBuffer[g_textInputCount++] = 0xD800 + (codepoint >> 10);
         g_textInputBuffer[g_textInputCount++] = 0xDC00 + (codepoint & 0x3FF);
     }
+}
+
+static void VANILLA_GLFW_scrollCallBack(GLFWwindow* window, double xOffset, double yOffset) {
+    scrollOffsetX = xOffset;
+    scrollOffsetY = yOffset;
 }
 
 bool VANILLA_GLFW_init(void) {
@@ -71,6 +79,7 @@ int VANILLA_GLFW_createWindow(unsigned int width, unsigned int height) {
     }
 
     glfwSetCharCallback(g_glfw.window, VANILLA_GLFW_charCallback);
+    glfwSetScrollCallback(g_glfw.window, VANILLA_GLFW_scrollCallBack);
 
     return 0;
 }
@@ -135,4 +144,12 @@ VANILLA_EXPORT void VANILLA_getMonitorSize(unsigned int* width, unsigned int* he
 VANILLA_EXPORT const uint16_t* VANILLA_getTextInput(uint32_t* outCount) {
     if (outCount) { *outCount = g_textInputCount; }
     return g_textInputBuffer;
+}
+
+VANILLA_EXPORT void VANILLA_getScrollOffset(double* xOffset, double* yOffset) {
+    if (xOffset) { *xOffset = scrollOffsetX; }
+    if (yOffset) { *yOffset = scrollOffsetY; }
+
+    scrollOffsetX = 0.0;
+    scrollOffsetY = 0.0;
 }
