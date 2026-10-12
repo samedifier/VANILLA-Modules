@@ -248,6 +248,10 @@ static void VANILLA_InputCursorPosCallback(GLFWwindow* window, double x, double 
     VANILLA_InputPushEvent(VANILLA_INPUTEVENT_MOUSE_MOVE, VANILLA_INPUTSTATE_ACTIVE);
 }
 
+static void VANILLA_InputScrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
+    VANILLA_InputPushEvent(VANILLA_INPUTEVENT_MOUSE_SCROLL, VANILLA_INPUTSTATE_ACTIVE);
+}
+
 void VANILLA_InputFree(void) {
     if (input.bindings) {
         for (uint32_t i = 0; i < VANILLA_INPUTEVENT_LIMIT; i++) {
@@ -302,6 +306,7 @@ void VANILLA_InputInit(void* window) {
     glfwSetKeyCallback(glfwWindow, VANILLA_InputKeyCallback);
     glfwSetMouseButtonCallback(glfwWindow, VANILLA_InputMouseButtonCallback);
     glfwSetCursorPosCallback(glfwWindow, VANILLA_InputCursorPosCallback);
+    glfwSetScrollCallback(glfwWindow, VANILLA_InputScrollCallback);
 }
 
 VANILLA_EXPORT void VANILLA_inputDispatch(void) {
