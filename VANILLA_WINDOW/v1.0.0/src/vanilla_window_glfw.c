@@ -43,11 +43,6 @@ static void VANILLA_GLFW_charCallback(GLFWwindow* window, unsigned int codepoint
     }
 }
 
-static void VANILLA_GLFW_scrollCallBack(GLFWwindow* window, double xOffset, double yOffset) {
-    scrollOffsetX = xOffset;
-    scrollOffsetY = yOffset;
-}
-
 bool VANILLA_GLFW_init(void) {
     memset(&g_glfw, 0, sizeof(g_glfw));
 
@@ -79,8 +74,6 @@ int VANILLA_GLFW_createWindow(unsigned int width, unsigned int height) {
     }
 
     glfwSetCharCallback(g_glfw.window, VANILLA_GLFW_charCallback);
-    glfwSetScrollCallback(g_glfw.window, VANILLA_GLFW_scrollCallBack);
-
     return 0;
 }
 

@@ -249,6 +249,8 @@ static void VANILLA_InputCursorPosCallback(GLFWwindow* window, double x, double 
 }
 
 static void VANILLA_InputScrollCallback(GLFWwindow* window, double xOffset, double yOffset) {
+    scrollOffsetX = xOffset;
+    scrollOffsetY = yOffset;
     VANILLA_InputPushEvent(VANILLA_INPUTEVENT_MOUSE_SCROLL, VANILLA_INPUTSTATE_ACTIVE);
 }
 
