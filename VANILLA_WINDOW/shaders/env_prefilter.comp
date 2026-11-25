@@ -1,0 +1,74 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+// Prefiltered specular cubemap: mip m holds the environment convolved with GGX for
+// roughness m / (MIPS - 1) (perceptual). One dispatch per mip. Mip 0 is a straight copy.
+
+#include "env.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 7) uniform samplerCube envCube;
+layout(set = 1, binding = 0, rgba16f) uniform writeonly image2DArray prefilterMip;
+
+layout(push_constant, std430) uniform PrefilterPush {
+    float roughness;
+    float size;       // this mip's face size
+    float _pad0;
+    float _pad1;
+} pc;
+
+const float PI = 3.14159265358979;
+const uint  SAMPLE_COUNT = 128u;
+
+vec2 hammersley(uint i, uint n) {
+    uint bits = i;
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return vec2(float(i) / float(n), float(bits) * 2.3283064365386963e-10);
+}
+
+vec3 importanceSampleGGX(vec2 xi, vec3 N, float alpha) {
+    float phi      = 2.0 * PI * xi.x;
+    float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (alpha * alpha - 1.0) * xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    vec3  H        = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+
+    vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 T  = normalize(cross(up, N));
+    vec3 B  = cross(N, T);
+    return normalize(T * H.x + B * H.y + N * H.z);
+}
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+    uint size = uint(pc.size);
+    if (id.x >= size || id.y >= size) { return; }
+
+    vec3 N = cubeDirection(id.z, vec2(id.xy), pc.size);
+
+    if (pc.roughness <= 0.0) {
+        imageStore(prefilterMip, ivec3(id), vec4(textureLod(envCube, N, 0.0).rgb, 1.0));
+        return;
+    }
+
+    float alpha = pc.roughness * pc.roughness;
+    vec3  sum    = vec3(0.0);
+    float weight = 0.0;
+
+    // N = V = R assumption (split-sum)
+    for (uint i = 0u; i < SAMPLE_COUNT; i++) {
+        vec3 H = importanceSampleGGX(hammersley(i, SAMPLE_COUNT), N, alpha);
+        vec3 L = normalize(2.0 * dot(N, H) * H - N);
+        float NdotL = dot(N, L);
+        if (NdotL > 0.0) {
+            sum    += textureLod(envCube, L, 0.0).rgb * NdotL;
+            weight += NdotL;
+        }
+    }
+
+    imageStore(prefilterMip, ivec3(id), vec4(sum / max(weight, 1e-4), 1.0));
+}

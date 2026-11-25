@@ -1,0 +1,72 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+// Multi-scattering LUT (Hillaire 2020, section 5.5): light scattered two or more times, per
+// (sun zenith, height), for a sun illuminance of 1. One workgroup per texel, 64 directions.
+// Rebuilt only when the atmosphere parameters change.
+
+#include "atmosphere.glsl"
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 64) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer AtmosphereBuffer { AtmosphereParams atmo; };
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D multiScatterImage;
+layout(set = 0, binding = 4) uniform sampler2D transmittanceLut;
+layout(set = 0, binding = 5) uniform sampler2D multiScatterLut;   // not read here (useMultiScatter = false)
+
+#include "atmosphere_scatter.glsl"
+
+const uint  DIRECTION_COUNT = 64u;   // 8 x 8 sphere grid
+const float SAMPLE_COUNT    = 20.0;
+
+shared vec3 sharedMultiScatter[64];
+shared vec3 sharedLuminance[64];
+
+void main() {
+    ivec2 texel = ivec2(gl_WorkGroupID.xy);
+    uint  index = gl_LocalInvocationID.z;
+
+    // Texel j <-> uv = j / (N - 1) (see multiScatterUv)
+    vec2 uv = vec2(texel) / float(MULTISCATTER_LUT_SIZE - 1);
+
+    float sunZenithCos = uv.x * 2.0 - 1.0;
+    float viewHeight   = atmo.bottomRadius + clamp(uv.y + 1e-4, 0.0, 1.0) * (atmo.topRadius - atmo.bottomRadius - 1e-3);
+
+    vec3 pos    = vec3(0.0, viewHeight, 0.0);
+    vec3 sunDir = normalize(vec3(sqrt(max(0.0, 1.0 - sunZenithCos * sunZenithCos)), sunZenithCos, 0.0));
+
+    // Uniform directions over the sphere
+    float i = 0.5 + float(index / 8u);
+    float j = 0.5 + float(index % 8u);
+    float theta = 2.0 * PI * i / 8.0;
+    float phi   = acos(1.0 - 2.0 * j / 8.0);
+    vec3  dir   = vec3(cos(theta) * sin(phi), cos(phi), sin(theta) * sin(phi));
+
+    ScatterResult r = integrateScattering(atmo, pos, dir, sunDir, SAMPLE_COUNT,
+                                          true, false, true, -1.0);
+
+    const float sphereSolidAngle = 4.0 * PI;
+    sharedMultiScatter[index] = r.multiScatterAs1 * sphereSolidAngle / float(DIRECTION_COUNT);
+    sharedLuminance[index]    = r.luminance       * sphereSolidAngle / float(DIRECTION_COUNT);
+
+    barrier();
+
+    for (uint stride = 32u; stride > 0u; stride >>= 1u) {
+        if (index < stride) {
+            sharedMultiScatter[index] += sharedMultiScatter[index + stride];
+            sharedLuminance[index]    += sharedLuminance[index + stride];
+        }
+        barrier();
+    }
+
+    if (index != 0u) { return; }
+
+    const float isotropicPhase = 1.0 / sphereSolidAngle;
+    vec3 multiScatterAs1  = sharedMultiScatter[0] * isotropicPhase;
+    vec3 inScattered      = sharedLuminance[0]    * isotropicPhase;
+
+    // Infinite series of further bounces: 1 + r + r^2 + ... = 1 / (1 - r)
+    vec3 L = inScattered / max(vec3(1.0) - multiScatterAs1, vec3(1e-4));
+
+    imageStore(multiScatterImage, texel, vec4(L, 1.0));
+}

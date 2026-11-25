@@ -1,0 +1,114 @@
+#version 460
+
+// VANILLA WINDOW internal GPU frustum culling (embedded, include/vanilla_window_cull_spv.h).
+// One dispatch per draw list and pass: every command whose entity's bounding sphere touches the pass's
+// frustum is appended to the same list region of the output buffer; counts[] feeds vkCmdDrawIndexedIndirectCount.
+// Order is not kept (opaque / mask lists only; blend lists stay sorted and unculled).
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct DrawCommand {          // VkDrawIndexedIndirectCommand, 20 bytes
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  vertexOffset;
+    uint firstInstance;       // = entity slot
+};
+
+layout(set = 0, binding = 0, std430) readonly  buffer InCommands  { DrawCommand inCmds[]; };
+layout(set = 0, binding = 1, std430) writeonly buffer OutCommands { DrawCommand outCmds[]; };
+layout(set = 0, binding = 2, std430) buffer Counts                { uint counts[]; };
+layout(set = 0, binding = 3, std430) readonly buffer Transforms   { mat4 transforms[]; };
+layout(set = 0, binding = 4, std430) readonly buffer SlotModels   { uint slotModels[]; };   // bit 31: never cull
+layout(set = 0, binding = 5, std430) readonly buffer ModelBounds  { vec4 bounds[]; };      // xyz center, w radius (0 = unknown)
+layout(set = 0, binding = 6, std430) readonly buffer MaterialSlots { uvec4 materialSlots[]; }; // slot, flags1, flags2, flags3
+
+// Occlusion (FRUSTUM_OCCLUSION, main camera): Hi-Z pyramid of the previous frame's scene depth (farthest depth
+// per texel, mip 0 = half resolution) and the view-projection it was rendered with.
+layout(set = 0, binding = 7) uniform sampler2D hiZ;
+layout(set = 0, binding = 8, std430) readonly buffer Occlusion {
+    mat4  hizViewProj;
+    ivec2 hizSize;      // mip 0
+    int   hizMips;
+    int   _padding;
+} occlusion;
+
+layout(push_constant, std430) uniform CullPush {
+    vec4 planes[6];           // xyz normal (inside = positive), w distance
+    uint inputOffset;         // first command of the list (entries)
+    uint count;
+    uint countIndex;          // counts[] entry of the list
+    uint flags;               // bit 0: shadow pass (drop NO_CAST_SHADOW entities), bit 1: occlusion test
+} pc;
+
+const uint NEVER_CULL            = 0x80000000u;
+const uint ENTITY_NO_CAST_SHADOW = 1u << 1;
+
+// true when the sphere is entirely behind the depth of last frame's occluders.
+bool occluded(vec3 center, float radius) {
+    vec2  uvMin = vec2( 1e30);
+    vec2  uvMax = vec2(-1e30);
+    float nearestZ = 1.0;
+
+    // Screen rectangle and nearest depth of the sphere's box (8 corners).
+    for (int k = 0; k < 8; k++) {
+        vec3 corner = center + radius * vec3((k & 1) != 0 ? 1.0 : -1.0, (k & 2) != 0 ? 1.0 : -1.0, (k & 4) != 0 ? 1.0 : -1.0);
+        vec4 clip = occlusion.hizViewProj * vec4(corner, 1.0);
+        if (clip.w <= 1e-5) { return false; }   // crosses the camera plane: keep
+
+        vec3 ndc = clip.xyz / clip.w;
+        // Flipped viewport (negative height): image row 0 is NDC y = +1.
+        vec2 uv = vec2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+        uvMin = min(uvMin, uv);
+        uvMax = max(uvMax, uv);
+        nearestZ = min(nearestZ, ndc.z);
+    }
+
+    if (nearestZ <= 0.0) { return false; }                         // reaches the near plane
+    uvMin = clamp(uvMin, 0.0, 1.0);
+    uvMax = clamp(uvMax, 0.0, 1.0);
+
+    // Level where the rectangle spans at most 2 x 2 texels.
+    vec2  extent = (uvMax - uvMin) * vec2(occlusion.hizSize);
+    float level  = ceil(log2(max(max(extent.x, extent.y), 1.0)));
+    int   lod    = clamp(int(level), 0, occlusion.hizMips - 1);
+
+    ivec2 size = max(occlusion.hizSize >> lod, ivec2(1));
+    ivec2 a = clamp(ivec2(uvMin * vec2(occlusion.hizSize)) >> lod, ivec2(0), size - 1);
+    ivec2 b = clamp(ivec2(uvMax * vec2(occlusion.hizSize)) >> lod, ivec2(0), size - 1);
+
+    float farthest = max(max(texelFetch(hiZ, a, lod).r, texelFetch(hiZ, ivec2(b.x, a.y), lod).r),
+                         max(texelFetch(hiZ, ivec2(a.x, b.y), lod).r, texelFetch(hiZ, b, lod).r));
+
+    return nearestZ > farthest;
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.count) { return; }
+
+    DrawCommand cmd = inCmds[pc.inputOffset + i];
+    uint slot = cmd.firstInstance;
+
+    if ((pc.flags & 1u) != 0u && (materialSlots[slot].y & ENTITY_NO_CAST_SHADOW) != 0u) { return; }
+
+    uint model = slotModels[slot];
+    if ((model & NEVER_CULL) == 0u) {
+        vec4 b = bounds[model];
+        if (b.w > 0.0) {
+            mat4  m = transforms[slot];
+            vec3  c = (m * vec4(b.xyz, 1.0)).xyz;
+            float s = max(length(m[0].xyz), max(length(m[1].xyz), length(m[2].xyz)));
+            float r = b.w * s;
+
+            for (int p = 0; p < 6; p++) {
+                if (dot(pc.planes[p].xyz, c) + pc.planes[p].w < -r) { return; }
+            }
+
+            if ((pc.flags & 2u) != 0u && occluded(c, r)) { return; }
+        }
+    }
+
+    uint index = atomicAdd(counts[pc.countIndex], 1u);
+    outCmds[pc.inputOffset + index] = cmd;
+}

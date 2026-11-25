@@ -1,0 +1,129 @@
+#version 460
+
+// VANILLA WINDOW internal compute skinning + morph targets (embedded, include/vanilla_window_skinning_spv.h).
+// One dispatch per frame: y = deformed entity (job), x = its vertices. Per vertex, glTF order:
+//     1. morph: p += sum(w_t * dP_t), n += sum(w_t * dN_t), t.xyz += sum(w_t * dT_t)   (non-zero targets only)
+//     2. skin:  M = inverse(entity world) * sum(w_i * jointWorld_i * inverseBind_i)
+// and writes the result into the entity's own region of the global vertex buffer, in the entity's local space
+// (the scene shaders apply the entity transform as for any other mesh).
+// Assumes the module's default 64-byte Vertex (16 words): pos 0-2, normal 3-5, uv 6-7, tangent 8-11,
+// uv1 12-13, color 14, pad 15. Replace with VANILLA_setSkinningShader for a custom layout.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+const uint DEFORM_SKIN  = 1u;
+const uint DEFORM_MORPH = 2u;
+const uint NONE = 0xFFFFFFFFu;
+
+struct DeformJob {
+    uint srcFirstVertex;    // model vertices (global vertex buffer)
+    uint dstFirstVertex;    // this entity's deformed region
+    uint vertexCount;
+    uint flags;             // DEFORM_SKIN | DEFORM_MORPH
+
+    uint skinVertexOffset;  // into SkinVertices
+    uint inverseBindOffset; // into InverseBinds
+    uint jointOffset;       // into JointSlots (entity slots of the joints)
+    uint entitySlot;
+
+    uint morphPositionOffset;  // into Deltas (vec3 units), NONE = not morphed
+    uint morphNormalOffset;
+    uint morphTangentOffset;
+    uint activeOffset;         // into ActiveTargets
+
+    uint activeCount;
+    uint _padding0;
+    uint _padding1;
+    uint _padding2;
+};
+
+layout(set = 0, binding = 0, std430) buffer Vertices          { uint words[]; } vertexBuffer;
+layout(set = 0, binding = 1, std430) readonly buffer Transforms { mat4 transforms[]; } transformBuffer;
+layout(set = 0, binding = 2, std430) readonly buffer SkinVertices { uvec4 skin[]; } skinBuffer;   // joints (4 x u16), weights (4 x unorm16)
+layout(set = 0, binding = 3, std430) readonly buffer InverseBinds { mat4 matrices[]; } inverseBindBuffer;
+layout(set = 0, binding = 4, std430) readonly buffer JointSlots   { uint slots[]; } jointBuffer;
+layout(set = 0, binding = 5, std430) readonly buffer Jobs         { DeformJob jobs[]; } jobBuffer;
+layout(set = 0, binding = 6, std430) readonly buffer Deltas       { float values[]; } deltaBuffer;   // packed vec3
+layout(set = 0, binding = 7, std430) readonly buffer ActiveTargets { uvec2 targets[]; } activeBuffer; // (target, weight bits)
+
+vec3 delta(uint base, uint index) {
+    uint i = (base + index) * 3u;
+    return vec3(deltaBuffer.values[i], deltaBuffer.values[i + 1u], deltaBuffer.values[i + 2u]);
+}
+
+const uint VERTEX_WORDS = 16u;
+
+mat4 jointMatrix(DeformJob job, uint joint) {
+    uint slot = jointBuffer.slots[job.jointOffset + joint];
+    return transformBuffer.transforms[slot] * inverseBindBuffer.matrices[job.inverseBindOffset + joint];
+}
+
+void main() {
+    DeformJob job = jobBuffer.jobs[gl_WorkGroupID.y];
+    uint v = gl_GlobalInvocationID.x;
+    if (v >= job.vertexCount) { return; }
+
+    uint src = (job.srcFirstVertex + v) * VERTEX_WORDS;
+    uint dst = (job.dstFirstVertex + v) * VERTEX_WORDS;
+
+    for (uint i = 0u; i < VERTEX_WORDS; i++) { vertexBuffer.words[dst + i] = vertexBuffer.words[src + i]; }
+
+    vec3  p  = uintBitsToFloat(uvec3(vertexBuffer.words[src + 0u], vertexBuffer.words[src + 1u], vertexBuffer.words[src + 2u]));
+    vec3  n  = uintBitsToFloat(uvec3(vertexBuffer.words[src + 3u], vertexBuffer.words[src + 4u], vertexBuffer.words[src + 5u]));
+    vec3  t  = uintBitsToFloat(uvec3(vertexBuffer.words[src + 8u], vertexBuffer.words[src + 9u], vertexBuffer.words[src + 10u]));
+    float tw = uintBitsToFloat(vertexBuffer.words[src + 11u]);
+
+    // 1. Morph targets (mesh space).
+    if ((job.flags & DEFORM_MORPH) != 0u) {
+        for (uint k = 0u; k < job.activeCount; k++) {
+            uvec2 target = activeBuffer.targets[job.activeOffset + k];
+            float w = uintBitsToFloat(target.y);
+            uint  index = target.x * job.vertexCount + v;
+
+            if (job.morphPositionOffset != NONE) { p += w * delta(job.morphPositionOffset, index); }
+            if (job.morphNormalOffset   != NONE) { n += w * delta(job.morphNormalOffset,   index); }
+            if (job.morphTangentOffset  != NONE) { t += w * delta(job.morphTangentOffset,  index); }
+        }
+    }
+
+    // 2. Skinning, back to the entity's local space (its transform is applied again when drawn).
+    if ((job.flags & DEFORM_SKIN) != 0u) {
+        uvec4 s = skinBuffer.skin[job.skinVertexOffset + v];
+        uvec4 joints  = uvec4(s.x & 0xFFFFu, s.x >> 16, s.y & 0xFFFFu, s.y >> 16);
+        vec4  weights = vec4(unpackUnorm2x16(s.z), unpackUnorm2x16(s.w));
+
+        float total = weights.x + weights.y + weights.z + weights.w;
+        if (total > 0.0) { weights /= total; } else { weights = vec4(1.0, 0.0, 0.0, 0.0); }
+
+        mat4 skin = mat4(0.0);
+        for (int k = 0; k < 4; k++) {
+            if (weights[k] > 0.0) { skin += weights[k] * jointMatrix(job, joints[k]); }
+        }
+
+        mat4 m = inverse(transformBuffer.transforms[job.entitySlot]) * skin;
+
+        // Normals: cofactor(M) * sign(det) = inverse transpose up to scale (non-uniform / mirrored joints).
+        mat3  m3   = mat3(m);
+        mat3  cof  = mat3(cross(m3[1], m3[2]), cross(m3[2], m3[0]), cross(m3[0], m3[1]));
+        float sdet = (dot(m3[0], cof[0]) < 0.0) ? -1.0 : 1.0;
+
+        p = (m * vec4(p, 1.0)).xyz;
+        n = cof * n * sdet;
+        t = m3 * t;
+        tw *= sdet;   // a mirrored skin matrix flips the bitangent
+    }
+
+    if (dot(n, n) > 1e-12) { n = normalize(n); }
+    if (dot(t, t) > 1e-12) { t = normalize(t); }
+
+    vertexBuffer.words[dst + 0u]  = floatBitsToUint(p.x);
+    vertexBuffer.words[dst + 1u]  = floatBitsToUint(p.y);
+    vertexBuffer.words[dst + 2u]  = floatBitsToUint(p.z);
+    vertexBuffer.words[dst + 3u]  = floatBitsToUint(n.x);
+    vertexBuffer.words[dst + 4u]  = floatBitsToUint(n.y);
+    vertexBuffer.words[dst + 5u]  = floatBitsToUint(n.z);
+    vertexBuffer.words[dst + 8u]  = floatBitsToUint(t.x);
+    vertexBuffer.words[dst + 9u]  = floatBitsToUint(t.y);
+    vertexBuffer.words[dst + 10u] = floatBitsToUint(t.z);
+    vertexBuffer.words[dst + 11u] = floatBitsToUint(tw);
+}

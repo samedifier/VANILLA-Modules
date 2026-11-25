@@ -1,0 +1,34 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+// Environment cubemap (128^2): sky-view LUT + simple lit ground below the horizon + night floor.
+// No sun disc: the sun is already the directional light. Values use the scene's light units
+// (x PI, like the sky pass). Rebuilt when the sun / atmosphere changes.
+
+#include "atmosphere.glsl"
+#include "env.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer AtmosphereBuffer { AtmosphereParams atmo; };
+layout(set = 0, binding = 4) uniform sampler2D transmittanceLut;
+layout(set = 0, binding = 6, rgba16f) uniform writeonly image2DArray envCubeImage;
+layout(set = 0, binding = 10) uniform sampler2D skyViewLut;   // U repeat
+
+void main() {
+    uvec3 id = gl_GlobalInvocationID;
+    if (id.x >= ENV_CUBE_SIZE || id.y >= ENV_CUBE_SIZE) { return; }
+
+    vec3 dir    = cubeDirection(id.z, vec2(id.xy), float(ENV_CUBE_SIZE));
+    vec3 camPos = vec3(0.0, atmo.cameraHeight, 0.0);
+
+    // Atmosphere in front (in-scattering)
+    vec3 L = texture(skyViewLut, skyViewUv(atmo, dir)).rgb * atmo.sunIlluminance;
+
+    // Ground below the horizon (same as the sky pass, so reflections match the background)
+    L += groundRadiance(atmo, transmittanceLut, camPos, dir);
+
+    L = L * PI + atmo.nightColor;
+
+    imageStore(envCubeImage, ivec3(id), vec4(L, 1.0));
+}

@@ -1,0 +1,31 @@
+#version 460
+
+// VANILLA WINDOW internal Hi-Z: one pyramid level from the previous one (farthest of 2x2, 3 on odd edges).
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, r32f) uniform readonly  image2D srcMip;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dstMip;
+
+layout(push_constant, std430) uniform HiZPush {
+    ivec2 srcSize;
+    ivec2 dstSize;
+    int   samples;
+} pc;
+
+void main() {
+    ivec2 id = ivec2(gl_GlobalInvocationID.xy);
+    if (id.x >= pc.dstSize.x || id.y >= pc.dstSize.y) { return; }
+
+    int extraX = (id.x == pc.dstSize.x - 1 && (pc.srcSize.x & 1) == 1) ? 1 : 0;
+    int extraY = (id.y == pc.dstSize.y - 1 && (pc.srcSize.y & 1) == 1) ? 1 : 0;
+
+    float farthest = 0.0;
+    for (int dy = 0; dy < 2 + extraY; dy++) {
+        for (int dx = 0; dx < 2 + extraX; dx++) {
+            farthest = max(farthest, imageLoad(srcMip, min(id * 2 + ivec2(dx, dy), pc.srcSize - 1)).r);
+        }
+    }
+
+    imageStore(dstMip, id, vec4(farthest));
+}

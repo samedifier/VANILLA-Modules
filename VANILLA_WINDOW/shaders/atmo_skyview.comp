@@ -1,0 +1,39 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+// Sky-view LUT: sky luminance seen from the camera height, per (world azimuth, zenith angle),
+// for a sun illuminance of 1. Rebuilt when the sun direction or the camera height changes.
+
+#include "atmosphere.glsl"
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer AtmosphereBuffer { AtmosphereParams atmo; };
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D skyViewImage;
+layout(set = 0, binding = 4) uniform sampler2D transmittanceLut;
+layout(set = 0, binding = 5) uniform sampler2D multiScatterLut;
+
+#include "atmosphere_scatter.glsl"
+
+const float SAMPLE_COUNT_MIN = 4.0;
+const float SAMPLE_COUNT_MAX = 32.0;
+
+void main() {
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    if (texel.x >= SKYVIEW_LUT_W || texel.y >= SKYVIEW_LUT_H) { return; }
+
+    // u: texel centers (repeat), v: texel j <-> j / (H - 1) (see skyViewUv)
+    vec2 uv = vec2((float(texel.x) + 0.5) / float(SKYVIEW_LUT_W),
+                   float(texel.y) / float(SKYVIEW_LUT_H - 1));
+
+    vec3 dir = skyViewDirection(atmo, uv);
+    vec3 pos = vec3(0.0, atmo.cameraHeight, 0.0);
+
+    // Fewer samples looking up (short, thin path), more toward the horizon
+    float sampleCount = mix(SAMPLE_COUNT_MAX, SAMPLE_COUNT_MIN, clamp(dir.y, 0.0, 1.0));
+
+    ScatterResult r = integrateScattering(atmo, pos, dir, normalize(atmo.sunDirection), sampleCount,
+                                          false, true, false, -1.0);
+
+    imageStore(skyViewImage, texel, vec4(r.luminance, 1.0));
+}

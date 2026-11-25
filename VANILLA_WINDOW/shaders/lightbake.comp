@@ -1,0 +1,123 @@
+#version 450
+
+// VANILLA WINDOW internal light bake shader.
+// Embedded into the module (include/vanilla_window_lightbake_spv.h).
+//
+// One workgroup = one 8x8 slice of a dirty brick.
+// Dispatch: X = dirty brick (offset by push constant), Z = slice (8 in 3D, 1 in 2D).
+// Every voxel of the brick is rebuilt from scratch (no accumulation, no drift).
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+struct Light {
+    vec3  position;  float range;
+    vec3  direction; float intensity;
+    vec3  color;     uint  type;      // 0 directional, 1 point, 2 spot
+    float innerCone; float outerCone;
+    uint  enabled;   uint  valid;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer LightBuffer {
+    Light lights[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer LightingInfo {
+    vec3  volumeMin;  uint lightCount;
+    vec3  volumeMax;  uint directionalCount;
+    uvec3 resolution; uint dimension;
+    vec3  ambient;    float _padding;
+    Light directional[8];
+} info;
+
+layout(set = 0, binding = 2, std430) readonly buffer BrickList {
+    uint bricks[];
+};
+
+// [0] red, [1] green, [2] blue. Each texel = (L00, L1-1, L10, L11).
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image3D shVolume[3];
+
+layout(push_constant, std430) uniform Push {
+    uint brickOffset;
+    uint brickCount;
+} pc;
+
+const uint BRICK = 8u;
+
+void main() {
+    uint brickSlot = pc.brickOffset + gl_WorkGroupID.x;
+    if (brickSlot >= pc.brickCount) { return; }
+
+    bool is2D = (info.dimension == 2u);
+
+    uvec3 brickCounts = uvec3(
+        info.resolution.x / BRICK,
+        info.resolution.y / BRICK,
+        is2D ? 1u : info.resolution.z / BRICK
+    );
+
+    uint brick = bricks[brickSlot];
+    uvec3 b = uvec3(
+        brick % brickCounts.x,
+        (brick / brickCounts.x) % brickCounts.y,
+        brick / (brickCounts.x * brickCounts.y)
+    );
+
+    uvec3 voxel = uvec3(
+        b.x * BRICK + gl_LocalInvocationID.x,
+        b.y * BRICK + gl_LocalInvocationID.y,
+        is2D ? 0u : b.z * BRICK + gl_WorkGroupID.z
+    );
+
+    vec3 cell = (info.volumeMax - info.volumeMin) / vec3(info.resolution);
+    vec3 p = info.volumeMin + (vec3(voxel) + 0.5) * cell;
+
+    // 2D: the sprite plane is z = 0, light.position.z is its height above it.
+    if (is2D) { p.z = 0.0; }
+
+    vec4 shR = vec4(0.0);
+    vec4 shG = vec4(0.0);
+    vec4 shB = vec4(0.0);
+
+    for (uint i = 0u; i < info.lightCount; i++) {
+        Light l = lights[i];
+        // valid: bit 0 = valid, bits 1+ = local shadow index + 1 (shadowed lights are evaluated per pixel).
+        if ((l.valid & 1u) == 0u || (l.valid >> 1) != 0u || l.enabled == 0u || l.type == 0u) { continue; }
+
+        vec3  L  = l.position - p;
+        float d2 = dot(L, L);
+        float r2 = l.range * l.range;
+        if (d2 >= r2) { continue; }
+
+        float d   = sqrt(d2);
+        vec3  dir = (d > 1e-4) ? L / d : vec3(0.0, 0.0, 1.0);
+
+        // Smooth window to zero at range, inverse-square inside.
+        float x      = d2 / r2;
+        float window = clamp(1.0 - x * x, 0.0, 1.0);
+        float atten  = (window * window) / (d2 + 1.0);
+
+        if (l.type == 2u) {
+            float c = dot(-dir, normalize(l.direction));
+            atten *= smoothstep(l.outerCone, l.innerCone, c);
+        }
+
+        vec3 E = l.color * l.intensity * atten;
+
+        // L1 SH projection of a light arriving from 'dir'.
+        vec4 basis = vec4(
+            0.282095,
+            0.488603 * dir.y,
+            0.488603 * dir.z,
+            0.488603 * dir.x
+        );
+
+        shR += basis * E.r;
+        shG += basis * E.g;
+        shB += basis * E.b;
+    }
+
+    ivec3 coord = ivec3(voxel);
+    imageStore(shVolume[0], coord, shR);
+    imageStore(shVolume[1], coord, shG);
+    imageStore(shVolume[2], coord, shB);
+}

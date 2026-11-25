@@ -1,0 +1,74 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+// Projects the environment cubemap onto L2 SH, convolved with the cosine lobe and divided by PI,
+// so sceneshader.frag gets diffuse = albedo * dot(sh, basis(N)). One workgroup.
+// Also writes the sun's transmittance at the camera (scales the sun light in the scene).
+// Output: the GPU-written tail of LightingInfo (bound with an offset).
+
+#include "atmosphere.glsl"
+#include "env.glsl"
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) readonly buffer AtmosphereBuffer { AtmosphereParams atmo; };
+layout(set = 0, binding = 4) uniform sampler2D transmittanceLut;
+layout(set = 0, binding = 6, rgba16f) uniform readonly image2DArray envCubeImage;
+
+layout(set = 0, binding = 8, std430) writeonly buffer EnvironmentTail {
+    vec4 envSH[9];
+    vec4 sunTransmittance;
+};
+
+shared vec3 sharedSH[64][9];   // 9 KB (16 KB is the guaranteed minimum)
+
+void main() {
+    uint index = gl_LocalInvocationID.x;
+
+    vec3 acc[9];
+    for (int i = 0; i < 9; i++) { acc[i] = vec3(0.0); }
+
+    const uint size  = uint(ENV_CUBE_SIZE);
+    const uint total = size * size * 6u;
+
+    for (uint t = index; t < total; t += 64u) {
+        uint face = t / (size * size);
+        uint rem  = t % (size * size);
+        vec2 texel = vec2(float(rem % size), float(rem / size));
+
+        vec3  dir = cubeDirection(face, texel, float(size));
+        float w   = cubeTexelSolidAngle(texel, float(size));
+        vec3  L   = imageLoad(envCubeImage, ivec3(ivec2(texel), int(face))).rgb;
+
+        float y[9];
+        shBasis(dir, y);
+        for (int i = 0; i < 9; i++) { acc[i] += L * (y[i] * w); }
+    }
+
+    for (int i = 0; i < 9; i++) { sharedSH[index][i] = acc[i]; }
+    barrier();
+
+    for (uint stride = 32u; stride > 0u; stride >>= 1u) {
+        if (index < stride) {
+            for (int i = 0; i < 9; i++) { sharedSH[index][i] += sharedSH[index + stride][i]; }
+        }
+        barrier();
+    }
+
+    if (index != 0u) { return; }
+
+    // Cosine lobe convolution (Ramamoorthi & Hanrahan), then / PI for the lambertian BRDF.
+    const float band[9] = float[](1.0, 2.0/3.0, 2.0/3.0, 2.0/3.0, 0.25, 0.25, 0.25, 0.25, 0.25);
+    for (int i = 0; i < 9; i++) {
+        envSH[i] = vec4(sharedSH[0][i] * band[i], 0.0);   // A_l / PI = band[l]
+    }
+
+    // Sun transmittance at the camera, faded out as the sun disc sinks behind the horizon.
+    vec3  sunDir    = normalize(atmo.sunDirection);
+    float h         = atmo.cameraHeight;
+    vec3  T         = texture(transmittanceLut, transmittanceUv(atmo, h, sunDir.y)).rgb;
+    float horizon   = -sqrt(max(0.0, 1.0 - (atmo.bottomRadius / h) * (atmo.bottomRadius / h)));
+    float halfAngle = sqrt(max(0.0, 1.0 - atmo.sunCosHalfAngle * atmo.sunCosHalfAngle));   // sin(half angle)
+    float visible   = smoothstep(horizon - halfAngle, horizon + halfAngle, sunDir.y);
+    sunTransmittance = vec4(T * visible, 1.0);
+}
